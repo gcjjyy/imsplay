@@ -364,6 +364,7 @@ export class ROLPlayer {
       currentVolumes: this.displayVolumes.slice(0, this.rolData.channelNum),
       instrumentNames: this.rolData.insName.slice(0, this.rolData.channelNum),
       channelMuted: this.channelMuted.slice(0, this.rolData.channelNum),
+      activeNotes: this.oplEngine.getActiveNotes(),
     };
   }
 

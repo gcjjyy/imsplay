@@ -155,6 +155,7 @@ export interface PlaybackState {
   currentVolumes: number[]; // 각 채널의 현재 볼륨
   instrumentNames?: string[]; // 각 채널의 악기명
   channelMuted?: boolean[]; // 각 채널의 뮤트 상태 (디버깅용)
+  activeNotes?: Array<{ channel: number; note: number }>; // 현재 재생 중인 노트 정보
 }
 
 /**

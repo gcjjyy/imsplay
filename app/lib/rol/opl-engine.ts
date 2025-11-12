@@ -521,4 +521,21 @@ export class OPLEngine {
 
     return t1;
   }
+
+  /**
+   * 현재 재생 중인 노트 정보를 반환
+   * @returns 채널과 노트 번호 배열
+   */
+  getActiveNotes(): Array<{ channel: number; note: number }> {
+    const activeNotes: Array<{ channel: number; note: number }> = [];
+    const maxVoices = 9; // melodic voice는 항상 9개
+
+    for (let i = 0; i < maxVoices; i++) {
+      if (this.voiceKeyOn[i] !== 0 && this.voiceNote[i] !== 0) {
+        activeNotes.push({ channel: i, note: this.voiceNote[i] });
+      }
+    }
+
+    return activeNotes;
+  }
 }

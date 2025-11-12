@@ -523,6 +523,7 @@ export class IMSPlayer {
       currentVolumes: this.displayVolumes.slice(0, this.imsData.chNum),
       instrumentNames: this.channelInstruments.slice(0, this.imsData.chNum),
       channelMuted: this.channelMuted.slice(0, this.imsData.chNum),
+      activeNotes: this.oplEngine.getActiveNotes(),
       songName: this.imsData.songName || "",
     };
   }

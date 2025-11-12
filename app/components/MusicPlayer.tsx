@@ -12,6 +12,7 @@ import DosPanel from "~/components/dos-ui/DosPanel";
 import DosButton from "~/components/dos-ui/DosButton";
 import DosList from "~/components/dos-ui/DosList";
 import DosSlider from "~/components/dos-ui/DosSlider";
+import PianoRoll from "./PianoRoll";
 
 type MusicFormat = "ROL" | "IMS" | null;
 
@@ -455,23 +456,21 @@ export default function MusicPlayer() {
         </div>
       </div>
 
+      {/* 피아노 건반 시각화 */}
+      <PianoRoll activeNotes={state?.activeNotes} />
+
       {/* 스테이터스 바 */}
-      {state && (
-        <div className="dos-status-bar">
-          <div className="dos-status-item">
-            상태: {state.isPlaying ? "재생중" : state.isPaused ? "일시정지" : "정지"}
-          </div>
-          <div className="dos-status-item">
-            위치: {state.currentByte}/{state.totalSize}
-          </div>
-          <div className="dos-status-item">
-            템포: {state.tempo}%
-          </div>
-          <div className="dos-status-item">
-            볼륨: {state.volume}
-          </div>
+      <div className="dos-status-bar">
+        <div className="dos-status-item">
+          상태: {state ? (state.isPlaying ? "재생중" : state.isPaused ? "일시정지" : "정지") : "대기"}
         </div>
-      )}
+        <div className="dos-status-item">
+          템포: {state ? `${state.tempo}%` : "100%"}
+        </div>
+        <div className="dos-status-item">
+          볼륨: {state ? state.volume : "100"}
+        </div>
+      </div>
     </div>
   );
 }
