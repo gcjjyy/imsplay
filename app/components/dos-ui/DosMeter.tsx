@@ -59,9 +59,7 @@ export default function DosMeter({ label, value, maxValue = 127, isMuted = false
   if (isMissing) {
     labelClass += " dos-meter-label-missing";
   }
-  if (isMuted) {
-    labelClass += " dos-meter-label-muted";
-  }
+  // Mute 상태에서도 악기 이름은 명확하게 표시
 
   return (
     <div className={`dos-meter-horizontal ${isMuted ? 'dos-meter-muted' : ''}`}>
