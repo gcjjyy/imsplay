@@ -77,11 +77,9 @@ export class ROLPlayer {
     }
 
     // DBOPL 내부 버퍼를 비우기 위해 더미 샘플 생성
-    console.log("[ROL initialize] DBOPL 버퍼 비우기 시작...");
     for (let i = 0; i < 10; i++) {
       this.oplEngine.generate(512);
     }
-    console.log("[ROL initialize] DBOPL 버퍼 비우기 완료");
 
     this.CUR_BYTE = 0;
     this.rewind();
@@ -375,10 +373,14 @@ export class ROLPlayer {
   toggleChannel(ch: number): void {
     if (ch >= 0 && ch < this.rolData.channelNum) {
       this.channelMuted[ch] = !this.channelMuted[ch];
-      // 뮤트하면 현재 재생 중인 노트를 끔
+
       if (this.channelMuted[ch]) {
+        // 뮤트: 현재 재생 중인 노트를 끄고 볼륨을 0으로
         this.oplEngine.noteOff(ch);
         this.oplEngine.setVoiceVolume(ch, 0);
+      } else {
+        // 언뮤트: 저장된 볼륨 복원
+        this.oplEngine.setVoiceVolume(ch, this.CH_VOL[ch]);
       }
     }
   }

@@ -63,10 +63,7 @@ export function useROLPlayer({
    * ROL/BNK 파일 로드 및 플레이어 초기화
    */
   useEffect(() => {
-    console.log("[useROLPlayer useEffect] 실행 - rolFile:", rolFile?.name, "bnkFile:", bnkFile?.name);
-
     if (!rolFile || !bnkFile) {
-      console.log("[useROLPlayer useEffect] 파일 없음, 종료");
       return;
     }
 
@@ -74,54 +71,31 @@ export function useROLPlayer({
 
     const initializePlayer = async () => {
       try {
-        console.log("[initializePlayer] 시작");
         setIsLoading(true);
         setError(null);
         setState(null); // 이전 플레이어 상태 제거
 
         // 파일 읽기
-        console.log("[initializePlayer] 파일 읽기 시작...");
         const rolBuffer = await rolFile.arrayBuffer();
-        console.log("[initializePlayer] ROL 파일 읽기 완료, 크기:", rolBuffer.byteLength);
         const bnkBuffer = await bnkFile.arrayBuffer();
-        console.log("[initializePlayer] BNK 파일 읽기 완료, 크기:", bnkBuffer.byteLength);
 
         if (cancelled) {
-          console.log("[initializePlayer] cancelled=true, 종료");
           return;
         }
 
         // ROL 파일 파싱
-        console.log("[initializePlayer] ROL 파싱 시작...");
         const rolData = parseROL(rolBuffer);
-        console.log("[initializePlayer] ROL 파싱 완료");
-
-        // 디버깅: ROL 파일 정보 출력
-        console.log("=== ROL File Info ===");
-        console.log("TPB:", rolData.tpb);
-        console.log("Basic Tempo:", rolData.basicTempo);
-        console.log("D_Mode:", rolData.dMode);
-        console.log("Channel Num:", rolData.channelNum);
-        console.log("Total Size:", rolData.totalSize);
-        console.log("Tempo Count:", rolData.tempoCount);
 
         // OPL 엔진 생성
-        console.log("[initializePlayer] OPL 엔진 생성 시작...");
         const oplEngine = new OPLEngine();
-        console.log("[initializePlayer] OPL 엔진 생성 완료");
 
         // Web Audio API 초기화 (먼저 AudioContext 생성하여 샘플레이트 확보)
-        console.log("[initializePlayer] AudioContext 생성 시작...");
         const audioContext = new AudioContext();
         audioContextRef.current = audioContext;
-        console.log("[initializePlayer] AudioContext 생성 완료");
 
         // ROL 플레이어 생성 및 초기화 (AudioContext 샘플레이트 전달)
-        console.log("[initializePlayer] ROLPlayer 생성 시작...");
         const player = new ROLPlayer(rolData, bnkBuffer, oplEngine);
-        console.log("[initializePlayer] ROLPlayer 생성 완료, initialize 호출 시작...");
         await player.initialize(audioContext.sampleRate);
-        console.log("[initializePlayer] ROLPlayer initialize 완료");
 
         // 채널 뮤트 상태 적용
         for (let i = 0; i < channelMuted.length; i++) {
@@ -131,26 +105,15 @@ export function useROLPlayer({
         }
 
         if (cancelled) {
-          console.log("[initializePlayer] cancelled=true (after initialize), 종료");
           return;
         }
 
         playerRef.current = player;
 
-        // 디버깅: 타이밍 정보 출력
-        const tickDelay = player.getTickDelay();
-        console.log("=== Timing Info ===");
-        console.log("AudioContext Sample Rate:", audioContext.sampleRate);
-        console.log("Tick Delay (ms):", tickDelay);
-        console.log("Ticks per second:", 1000 / tickDelay);
-
         // 오디오 프로세서 초기화
-        console.log("[initializePlayer] 오디오 프로세서 초기화 시작...");
         initializeAudioProcessor(audioContext);
-        console.log("[initializePlayer] 오디오 프로세서 초기화 완료");
 
         // 초기 상태 설정
-        console.log("[initializePlayer] 상태 설정 중...");
         fileNameRef.current = rolFile.name; // fileNameRef 업데이트
         setState({
           ...player.getState(),
@@ -158,7 +121,6 @@ export function useROLPlayer({
           channelMuted: channelMuted.slice(0, rolData.channelNum),
         });
         setIsLoading(false);
-        console.log("[initializePlayer] 완료! fileName:", rolFile.name);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Unknown error");
@@ -179,22 +141,11 @@ export function useROLPlayer({
    * 오디오 프로세서 초기화 (alib.js 예제 방식)
    */
   const initializeAudioProcessor = useCallback((audioContext: AudioContext) => {
-    console.log("[initializeAudioProcessor] 시작");
     const bufferSize = 2048;
     const processor = audioContext.createScriptProcessor(bufferSize, 0, 2);
 
-    let callbackCount = 0;
-
     processor.onaudioprocess = (e) => {
-      callbackCount++;
-      if (callbackCount === 1) {
-        console.log("[onaudioprocess] 첫 번째 콜백 실행");
-      }
-
       if (!playerRef.current) {
-        if (callbackCount <= 3) {
-          console.log("[onaudioprocess] playerRef.current가 없음");
-        }
         return;
       }
 
@@ -203,9 +154,6 @@ export function useROLPlayer({
 
       // 재생 중이 아니면 무음 출력
       if (!state.isPlaying) {
-        if (callbackCount <= 3) {
-          console.log("[onaudioprocess] 재생 중이 아님, 무음 출력");
-        }
         return;
       }
       const outputBuffer = e.outputBuffer;
@@ -284,30 +232,20 @@ export function useROLPlayer({
    * 재생 시작
    */
   const play = useCallback(() => {
-    console.log("[useROLPlayer.play] 시작");
-    console.log("[useROLPlayer.play] playerRef:", playerRef.current);
-    console.log("[useROLPlayer.play] audioContextRef:", audioContextRef.current);
-
     if (!playerRef.current || !audioContextRef.current) {
-      console.log("[useROLPlayer.play] playerRef 또는 audioContextRef가 없음!");
       return;
     }
 
     // AudioContext resume (브라우저 정책)
-    console.log("[useROLPlayer.play] AudioContext 상태:", audioContextRef.current.state);
     if (audioContextRef.current.state === "suspended") {
-      console.log("[useROLPlayer.play] AudioContext resume 중...");
       audioContextRef.current.resume();
     }
 
-    console.log("[useROLPlayer.play] playerRef.current.play() 호출 전");
     playerRef.current.play();
-    console.log("[useROLPlayer.play] playerRef.current.play() 호출 후");
 
     lenGenRef.current = 0;
 
     // UI는 30fps로 업데이트
-    console.log("[useROLPlayer.play] UI 업데이트 타이머 설정");
     uiUpdateIntervalRef.current = setInterval(() => {
       if (playerRef.current) {
         setState({
@@ -321,7 +259,6 @@ export function useROLPlayer({
       ...playerRef.current.getState(),
       fileName: fileNameRef.current,
     });
-    console.log("[useROLPlayer.play] 완료");
   }, []);
 
   /**

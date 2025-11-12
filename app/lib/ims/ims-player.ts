@@ -83,7 +83,9 @@ export class IMSPlayer {
    * @returns 다음 틱까지의 지연 시간 (틱 단위)
    */
   tick(): number {
-    if (!this.isPlaying) return 0;
+    if (!this.isPlaying) {
+      return 0;
+    }
 
     // 디스플레이 볼륨 decay
     for (let i = 0; i < this.imsData.chNum; i++) {
@@ -161,37 +163,35 @@ export class IMSPlayer {
     let tDelay = 0;
 
     while (true) {
+      // 원본: ch=readmem(cur_byte++);
       const ch = this.readByte();
       this.curByte++;
 
-      // 루프 마커 체크 (0xfc)
-      if (ch === 0xfc) {
+      // 원본: if ( readmem(cur_byte)==0xfc ) cur_byte=0;
+      if (this.readByte() === 0xfc) {
         if (this.loopEnabled) {
           this.curByte = 0;
           this.runningStatus = 0;
-          // 1틱 대기 후 다음 루프 시작 (0을 반환하면 do-while 무한 루프 발생)
-          return 1;
         } else {
           this.isPlaying = false;
           return 0;
         }
       }
 
-      // 확장 딜레이 (0xF8 = 240틱 추가)
+      // 원본: if ( ch==0xf8 ) { t_delay+=240; goto time_size; }
       if (ch === 0xf8) {
         tDelay += 240;
-        continue;  // 다음 바이트 읽기
+        continue;  // goto time_size
       }
 
-      // 딜레이 값 추가
+      // 원본: if ( ch ) t_delay+=ch;
       if (ch) {
         tDelay += ch;
       }
 
-      break;  // 루프 종료
+      // 원본: return (t_delay);
+      return tDelay;
     }
-
-    return tDelay;
   }
 
   /**
@@ -201,8 +201,6 @@ export class IMSPlayer {
     const insIndex = this.readByte();
     this.curByte++;
 
-    const shouldLog = this.curByte < 100;
-
     const params = this.bnkData.get(insIndex);
     if (insIndex < this.imsData.insNames.length) {
       const insName = this.imsData.insNames[insIndex];
@@ -210,9 +208,6 @@ export class IMSPlayer {
         this.oplEngine.setVoiceTimbre(ch, params);
         // 악기명 업데이트 (화면 표시용)
         this.channelInstruments[ch] = insName;
-        if (shouldLog) {
-          console.log(`[handleInstrumentChange] ch:${ch} insIndex:${insIndex} insName:${insName} ✓`);
-        }
       } else {
         // 뱅크에서 악기를 찾을 수 없는 경우
         this.channelInstruments[ch] = "!" + insName;
@@ -255,11 +250,6 @@ export class IMSPlayer {
     // 1비트 오른쪽 시프트 (0x0000-0x3FFF 범위로)
     data1 = data1 >> 1;
 
-    const shouldLog = this.curByte < 200;
-    if (shouldLog) {
-      console.log(`[handlePitchBend] ch:${ch} byte1:${byte1} byte2:${byte2} pitchBend:${data1} (0x${data1.toString(16)}) instrument:${this.channelInstruments[ch] || '(none)'}`);
-    }
-
     this.oplEngine.setVoicePitch(ch, data1);
   }
 
@@ -298,13 +288,8 @@ export class IMSPlayer {
     const volume = this.readByte();
     this.curByte++;
 
-    const shouldLog = this.curByte < 200;
-
     // 채널이 뮤트되어 있으면 스킵
     if (this.channelMuted[ch]) {
-      if (shouldLog) {
-        console.log(`[handleNoteOn1] ch:${ch} 뮤트됨 - 스킵`);
-      }
       return;
     }
 
@@ -317,10 +302,6 @@ export class IMSPlayer {
 
     // 디스플레이 볼륨 설정 (note on 시 최대로)
     this.displayVolumes[ch] = volume;
-
-    if (shouldLog) {
-      console.log(`[handleNoteOn1] ch:${ch} pitch:${pitch} volume:${volume} curVol:${this.curVol[ch]}`);
-    }
 
     // IMS 파일은 이미 칩 기준(CHIP_MID_C=48)으로 저장되어 있으므로
     // noteOn의 MID_C-CHIP_MID_C 변환(-12)을 상쇄하기 위해 +12 필요
@@ -337,13 +318,8 @@ export class IMSPlayer {
     const volume = this.readByte();
     this.curByte++;
 
-    const shouldLog = this.curByte < 200;
-
     // 채널이 뮤트되어 있으면 스킵
     if (this.channelMuted[ch]) {
-      if (shouldLog) {
-        console.log(`[handleNoteOn2] ch:${ch} 뮤트됨 - 스킵`);
-      }
       return;
     }
 
@@ -358,15 +334,9 @@ export class IMSPlayer {
       // 디스플레이 볼륨 설정 (note on 시 최대로)
       this.displayVolumes[ch] = volume;
 
-      if (shouldLog) {
-        console.log(`[handleNoteOn2] ch:${ch} pitch:${pitch} volume:${volume} curVol:${this.curVol[ch]}`);
-      }
-
       // IMS 파일은 이미 칩 기준(CHIP_MID_C=48)으로 저장되어 있으므로
       // noteOn의 MID_C-CHIP_MID_C 변환(-12)을 상쇄하기 위해 +12 필요
       this.oplEngine.noteOn(ch, pitch + 12);
-    } else if (shouldLog) {
-      console.log(`[handleNoteOn2] ch:${ch} pitch:${pitch} volume:0 - 스킵`);
     }
   }
 
@@ -552,10 +522,14 @@ export class IMSPlayer {
   toggleChannel(ch: number): void {
     if (ch >= 0 && ch < this.imsData.chNum) {
       this.channelMuted[ch] = !this.channelMuted[ch];
-      // 뮤트하면 현재 재생 중인 노트를 끔
+
       if (this.channelMuted[ch]) {
+        // 뮤트: 현재 재생 중인 노트를 끄고 볼륨을 0으로
         this.oplEngine.noteOff(ch);
         this.oplEngine.setVoiceVolume(ch, 0);
+      } else {
+        // 언뮤트: 저장된 볼륨 복원
+        this.oplEngine.setVoiceVolume(ch, this.curVol[ch]);
       }
     }
   }

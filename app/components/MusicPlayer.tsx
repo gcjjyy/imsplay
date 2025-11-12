@@ -17,29 +17,29 @@ type MusicFormat = "ROL" | "IMS" | null;
 
 // 샘플 음악 목록
 interface MusicSample {
-  name: string;
   musicFile: string;
   format: "ROL" | "IMS";
 }
 
 const MUSIC_SAMPLES: MusicSample[] = [
   // IMS 샘플
-  // { name: "4 Just A Minute", musicFile: "/4JSTAMNT.IMS", format: "IMS" },
-  { name: "Cute Level 2", musicFile: "/CUTE-LV2.IMS", format: "IMS" },
-  // { name: "DBBP Lee", musicFile: "/DBBP^LEE.IMS", format: "IMS" },
-  // { name: "DBBP Lim", musicFile: "/DBBP^LIM.IMS", format: "IMS" },
-  { name: "Dragon Quest 4A", musicFile: "/DQUEST4A.IMS", format: "IMS" },
-  { name: "Final Fantasy V Logo", musicFile: "/FF5-LOGO.IMS", format: "IMS" },
-  // { name: "Knight", musicFile: "/KNIGHT-!.IMS", format: "IMS" },
-  { name: "Naucika 2", musicFile: "/NAUCIKA2.IMS", format: "IMS" },
-  { name: "Side End", musicFile: "/SIDE-END.IMS", format: "IMS" },
+  // { musicFile: "/4JSTAMNT.IMS", format: "IMS" },
+  { musicFile: "/CUTE-LV2.IMS", format: "IMS" },
+  // { musicFile: "/DBBP^LEE.IMS", format: "IMS" },
+  // { musicFile: "/DBBP^LIM.IMS", format: "IMS" },
+  { musicFile: "/DQUEST4A.IMS", format: "IMS" },
+  { musicFile: "/FF5-LOGO.IMS", format: "IMS" },
+  // { musicFile: "/KNIGHT-!.IMS", format: "IMS" },
+  { musicFile: "/NAUCIKA2.IMS", format: "IMS" },
+  { musicFile: "/SIDE-END.IMS", format: "IMS" },
+  { musicFile: "/AMG0018.IMS", format: "IMS" },
 
   // ROL 샘플
-  // { name: "4 Just A Minute", musicFile: "/4JSTAMNT.ROL", format: "ROL" },
-  // { name: "Cute Level 2", musicFile: "/CUTE-LV2.ROL", format: "ROL" },
-  // { name: "Final Fantasy V Logo", musicFile: "/FF5-LOGO.ROL", format: "ROL" },
-  // { name: "Naucika 2", musicFile: "/NAUCIKA2.ROL", format: "ROL" },
-  // { name: "Side End", musicFile: "/SIDE-END.ROL", format: "ROL" },
+  // { musicFile: "/4JSTAMNT.ROL", format: "ROL" },
+  // { musicFile: "/CUTE-LV2.ROL", format: "ROL" },
+  // { musicFile: "/FF5-LOGO.ROL", format: "ROL" },
+  // { musicFile: "/NAUCIKA2.ROL", format: "ROL" },
+  // { musicFile: "/SIDE-END.ROL", format: "ROL" },
 ];
 
 const BNK_FILE = "/STANDARD.BNK";
@@ -100,30 +100,22 @@ export default function MusicPlayer() {
    * 샘플 음악 로드
    */
   const loadSample = async (samplePath: string) => {
-    console.log("[loadSample] 시작:", samplePath);
     setIsLoadingSample(true);
     try {
       const filename = samplePath.split("/").pop() || "sample";
-      console.log("[loadSample] 파일명:", filename);
 
-      console.log("[loadSample] 파일 로딩 시작...");
       const [musicFileObj, bnkFileObj] = await Promise.all([
         loadFileFromURL(samplePath, filename),
         loadFileFromURL(BNK_FILE, "STANDARD.BNK"),
       ]);
-      console.log("[loadSample] 파일 로딩 완료");
 
       // 샘플 파일은 별도 state에 저장 (사용자 업로드 GUI에 영향 없음)
-      console.log("[loadSample] setSampleMusicFile 호출:", musicFileObj.name);
       setSampleMusicFile(musicFileObj);
-      console.log("[loadSample] setSampleBnkFile 호출:", bnkFileObj.name);
       setSampleBnkFile(bnkFileObj);
-      console.log("[loadSample] 상태 업데이트 완료 (비동기)");
     } catch (error) {
       console.error("[loadSample] 오류:", error);
     } finally {
       setIsLoadingSample(false);
-      console.log("[loadSample] 완료");
     }
   };
 
@@ -131,38 +123,17 @@ export default function MusicPlayer() {
    * 샘플 로드 및 자동 재생
    */
   const loadAndPlaySample = async (samplePath: string) => {
-    console.log("[loadAndPlaySample] 시작:", samplePath);
-    console.log("[loadAndPlaySample] 함수 호출 시점 상태:", {
-      currentState: state,
-      currentFormat: format,
-      currentMusicFile: musicFile?.name,
-      autoPlay,
-    });
-
     // 기존 플레이어 정지
     if (state?.isPlaying) {
-      console.log("[loadAndPlaySample] 기존 플레이어 정지");
       stop();
     }
 
-    console.log("[loadAndPlaySample] setSelectedSample 호출:", samplePath);
     setSelectedSample(samplePath);
 
-    console.log("[loadAndPlaySample] loadSample 호출 전");
     await loadSample(samplePath);
-    console.log("[loadAndPlaySample] loadSample 호출 후");
-    console.log("[loadAndPlaySample] loadSample 완료 후 상태:", {
-      sampleMusicFile: sampleMusicFile?.name,
-      sampleBnkFile: sampleBnkFile?.name,
-      format,
-      state,
-    });
 
     // 파일 로드 후 autoPlay 플래그 설정 (파일 경로 저장)
-    console.log("[loadAndPlaySample] setAutoPlay(samplePath) 호출 직전");
     setAutoPlay(samplePath);
-    console.log("[loadAndPlaySample] setAutoPlay(samplePath) 호출 직후");
-    console.log("[loadAndPlaySample] 종료");
   };
 
   /**
@@ -182,40 +153,9 @@ export default function MusicPlayer() {
     const sampleExt = selectedSample.toLowerCase().split(".").pop();
     const expectedFormat = sampleExt === "rol" ? "ROL" : sampleExt === "ims" ? "IMS" : null;
 
-    console.log("[autoPlay useEffect] 실행됨:", {
-      autoPlay,
-      autoPlayFileName,
-      currentFileName,
-      filesMatch: autoPlayFileName === currentFileName,
-      hasState: !!state,
-      hasPlay: !!play,
-      format,
-      expectedFormat,
-      hasMusicFile: !!musicFile,
-      selectedSample,
-      stateDetails: state ? {
-        isPlaying: state.isPlaying,
-        isPaused: state.isPaused,
-        currentByte: state.currentByte,
-        totalSize: state.totalSize,
-      } : null,
-    });
-
     // 올바른 플레이어가 준비되었고, autoPlay 파일이 실제로 로드되었으면 재생
     // state.fileName을 사용하여 정확히 해당 플레이어의 상태인지 확인
     const stateFileName = state?.fileName;
-    const conditionCheck = {
-      hasAutoPlay: !!autoPlay,
-      hasState: !!state,
-      hasPlay: !!play,
-      formatMatch: format === expectedFormat,
-      hasMusicFile: !!musicFile,
-      fileNameMatch: autoPlayFileName === currentFileName,
-      stateFileNameMatch: stateFileName === currentFileName, // state의 fileName 확인
-    };
-
-    console.log("[autoPlay useEffect] 조건 체크:", conditionCheck);
-    console.log("[autoPlay useEffect] state.fileName:", stateFileName, "vs currentFileName:", currentFileName);
 
     if (
       autoPlay &&
@@ -226,19 +166,8 @@ export default function MusicPlayer() {
       autoPlayFileName === currentFileName && // 파일명 일치 확인
       stateFileName === currentFileName // state의 fileName이 현재 파일과 일치하는지 확인!
     ) {
-      console.log("[autoPlay useEffect] ✅ 모든 조건 만족! 자동 재생 시작 (format:", format, ")");
-      console.log("[autoPlay useEffect] play() 호출 직전");
       play();
-      console.log("[autoPlay useEffect] play() 호출 직후");
       setAutoPlay(null); // 플래그 리셋
-    } else {
-      console.log("[autoPlay useEffect] ❌ 조건 불만족으로 재생 안함");
-      if (!conditionCheck.hasState) console.log("  → state 없음");
-      if (!conditionCheck.hasPlay) console.log("  → play 함수 없음");
-      if (!conditionCheck.formatMatch) console.log("  → format 불일치:", format, "!==", expectedFormat);
-      if (!conditionCheck.hasMusicFile) console.log("  → musicFile 없음");
-      if (!conditionCheck.fileNameMatch) console.log("  → 파일명 불일치:", autoPlayFileName, "!==", currentFileName);
-      if (!conditionCheck.stateFileNameMatch) console.log("  → state.fileName 불일치:", stateFileName, "!==", currentFileName);
     }
   }, [autoPlay, state, play, format, selectedSample, musicFile]);
 
@@ -247,11 +176,13 @@ export default function MusicPlayer() {
   // 재생 시간 추적
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const playStartTimeRef = useRef<number | null>(null);
+  const prevProgressRef = useRef<number>(0);
 
   useEffect(() => {
     if (state?.isPlaying && !playStartTimeRef.current) {
       playStartTimeRef.current = Date.now();
       setElapsedSeconds(0);
+      prevProgressRef.current = 0;
     } else if (!state?.isPlaying) {
       playStartTimeRef.current = null;
     }
@@ -259,6 +190,13 @@ export default function MusicPlayer() {
     if (state?.isPlaying) {
       const interval = setInterval(() => {
         if (playStartTimeRef.current) {
+          // 루프 감지: progress가 크게 감소하면 재생 시간 리셋
+          if (prevProgressRef.current > 90 && progress < 10) {
+            playStartTimeRef.current = Date.now();
+            setElapsedSeconds(0);
+          }
+          prevProgressRef.current = progress;
+
           const elapsed = Math.floor((Date.now() - playStartTimeRef.current) / 1000);
           setElapsedSeconds(elapsed);
         }
@@ -266,7 +204,7 @@ export default function MusicPlayer() {
 
       return () => clearInterval(interval);
     }
-  }, [state?.isPlaying]);
+  }, [state?.isPlaying, progress]);
 
   // 시간 포맷팅 함수 (초 -> mm:ss)
   const formatTime = (seconds: number): string => {
@@ -287,17 +225,10 @@ export default function MusicPlayer() {
           <span className={`dos-badge ${sample.format === 'ROL' ? 'dos-badge-rol' : 'dos-badge-ims'}`}>
             {sample.format}
           </span>
-          <span>{sample.name.toUpperCase()}</span>
+          <span>{sample.musicFile.slice(1)}</span>
         </div>
         <DosButton
           onClick={() => {
-            console.log("[재생버튼 클릭] 샘플:", sample.musicFile);
-            console.log("[재생버튼 클릭] 현재 상태:", {
-              isPlaying: state?.isPlaying,
-              currentFormat: format,
-              currentMusicFile: musicFile?.name,
-              isLoadingSample,
-            });
             loadAndPlaySample(sample.musicFile);
           }}
           disabled={isLoadingSample}
@@ -316,7 +247,7 @@ export default function MusicPlayer() {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.2
+        {" "}IMS/ROL 웹플레이어 v1.4
         {format && ` - ${format} 모드`}
       </div>
 

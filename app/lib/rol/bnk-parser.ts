@@ -63,10 +63,43 @@ function parseBNKHeader(reader: BinaryReader): BNKHeader {
 }
 
 /**
- * 특정 악기들을 BNK 파일에서 로드
+ * BNK 파일에서 전체 악기 맵 생성
  *
- * EPLAYROL.C의 LoadBank() 로직을 구현
- * 이진 탐색을 사용하여 악기를 검색
+ * @param buffer BNK 파일의 ArrayBuffer
+ * @returns 악기 이름(소문자) → 파라미터 배열 (28바이트) 맵
+ */
+function loadAllInstruments(buffer: ArrayBuffer): Map<string, number[]> {
+  const reader = new BinaryReader(buffer);
+  const header = parseBNKHeader(reader);
+  const allInstruments = new Map<string, number[]>();
+
+  console.log(`[loadAllInstruments] BNK 파일 악기 총 개수: ${header.insMaxNum}`);
+
+  // 전체 악기 리스트 순회하여 Map 생성
+  for (let i = 0; i < header.insMaxNum; i++) {
+    // 악기 리스트에서 이름과 인덱스 읽기
+    reader.seek(header.insListOff + i * 12);
+    const insIndex = reader.readUint16();
+    reader.skip(1); // flag
+    const name = reader.readString(9, true);
+
+    // 악기 데이터 읽기 (30바이트: percussion(1) + voiceNumber(1) + params(28))
+    reader.seek(header.insDataOff + insIndex * 30 + 2);
+    const params: number[] = [];
+    for (let j = 0; j < 28; j++) {
+      params.push(reader.readUint8());
+    }
+
+    // 소문자로 정규화하여 저장
+    allInstruments.set(name.toLowerCase(), params);
+  }
+
+  console.log(`[loadAllInstruments] 총 ${allInstruments.size}개 악기 로드 완료`);
+  return allInstruments;
+}
+
+/**
+ * 특정 악기들을 BNK 파일에서 로드
  *
  * @param buffer BNK 파일의 ArrayBuffer
  * @param instrumentNames 로드할 악기 이름 배열
@@ -76,90 +109,20 @@ export function loadInstruments(
   buffer: ArrayBuffer,
   instrumentNames: string[]
 ): Map<string, number[]> {
-  const reader = new BinaryReader(buffer);
-  const header = parseBNKHeader(reader);
+  // 전체 악기 맵 생성
+  const allInstruments = loadAllInstruments(buffer);
   const instruments = new Map<string, number[]>();
 
-  // 각 악기에 대해 이진 탐색
+  // 요청된 악기들만 추출
   for (const insName of instrumentNames) {
-    const params = findInstrument(reader, header, insName);
+    const params = allInstruments.get(insName.toLowerCase());
     if (params) {
       instruments.set(insName, params);
+    } else {
+      console.warn(`[loadInstruments] 악기 "${insName}" 를 BNK 파일에서 찾을 수 없음`);
     }
   }
 
   return instruments;
 }
 
-/**
- * 이진 탐색으로 악기 찾기
- *
- * EPLAYROL.C:114-135 로직 구현
- */
-function findInstrument(
-  reader: BinaryReader,
-  header: BNKHeader,
-  targetName: string
-): number[] | null {
-  let top = 0;
-  let bottom = header.insMaxNum - 1;
-  let mid = Math.floor(bottom / 2);
-
-  let diff = 0;
-  const name = new Array(9).fill(0);
-
-  // 이진 탐색
-  do {
-    // 악기 리스트에서 mid 위치의 이름 읽기
-    // 각 항목은 12바이트: index(2) + flag(1) + name(9)
-    reader.seek(header.insListOff + mid * 12 + 3); // flag 다음부터 name
-    const currentName = reader.readString(9, true);
-
-    // 대소문자 구분 없이 비교 (strcmpi)
-    diff = strcmpi(targetName, currentName);
-
-    if (diff !== 0) {
-      if (diff < 0) {
-        bottom = mid - 1;
-      } else {
-        top = mid + 1;
-      }
-      mid = Math.floor((bottom + top) / 2);
-    }
-  } while (diff !== 0 && top <= bottom);
-
-  // 찾지 못함
-  if (diff !== 0) {
-    return null;
-  }
-
-  // 찾았으면 데이터 읽기
-  // 악기 리스트에서 index 읽기
-  reader.seek(header.insListOff + mid * 12);
-  const insIndex = reader.readUint16();
-
-  // 악기 데이터 읽기
-  // 각 악기 데이터는 30바이트: percussion(1) + voiceNumber(1) + params(28)
-  reader.seek(header.insDataOff + insIndex * 30 + 2); // percussion, voiceNumber 건너뛰기
-
-  const params: number[] = [];
-  for (let j = 0; j < 28; j++) {
-    params.push(reader.readUint8());
-  }
-
-  return params;
-}
-
-/**
- * 대소문자 구분 없는 문자열 비교 (C의 strcmpi)
- *
- * @returns 0 if equal, <0 if a < b, >0 if a > b
- */
-function strcmpi(a: string, b: string): number {
-  const aLower = a.toLowerCase();
-  const bLower = b.toLowerCase();
-
-  if (aLower < bLower) return -1;
-  if (aLower > bLower) return 1;
-  return 0;
-}
