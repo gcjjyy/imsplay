@@ -25,6 +25,7 @@ export class IMSPlayer {
   private displayVolumes: number[] = new Array(11).fill(0);  // 디스플레이용 볼륨 (decay 효과)
   private currentTempo: number;
   private channelInstruments: string[] = new Array(11).fill("");
+  private channelMuted: boolean[] = new Array(11).fill(false);  // 채널 뮤트 상태 (디버깅용)
 
   // 제어 변수
   private VOL_C: number = 127;  // 전체 볼륨 (0-127)
@@ -295,6 +296,14 @@ export class IMSPlayer {
 
     const shouldLog = this.curByte < 200;
 
+    // 채널이 뮤트되어 있으면 스킵
+    if (this.channelMuted[ch]) {
+      if (shouldLog) {
+        console.log(`[handleNoteOn1] ch:${ch} 뮤트됨 - 스킵`);
+      }
+      return;
+    }
+
     this.oplEngine.noteOff(ch);
 
     if (this.curVol[ch] !== volume) {
@@ -325,6 +334,14 @@ export class IMSPlayer {
     this.curByte++;
 
     const shouldLog = this.curByte < 200;
+
+    // 채널이 뮤트되어 있으면 스킵
+    if (this.channelMuted[ch]) {
+      if (shouldLog) {
+        console.log(`[handleNoteOn2] ch:${ch} 뮤트됨 - 스킵`);
+      }
+      return;
+    }
 
     this.oplEngine.noteOff(ch);
 
@@ -458,7 +475,22 @@ export class IMSPlayer {
       currentTempo: this.currentTempo,
       currentVolumes: this.displayVolumes.slice(0, this.imsData.chNum),
       instrumentNames: this.channelInstruments.slice(0, this.imsData.chNum),
+      channelMuted: this.channelMuted.slice(0, this.imsData.chNum),
     };
+  }
+
+  /**
+   * 채널 뮤트 토글 (디버깅용)
+   */
+  toggleChannel(ch: number): void {
+    if (ch >= 0 && ch < this.imsData.chNum) {
+      this.channelMuted[ch] = !this.channelMuted[ch];
+      // 뮤트하면 현재 재생 중인 노트를 끔
+      if (this.channelMuted[ch]) {
+        this.oplEngine.noteOff(ch);
+        this.oplEngine.setVoiceVolume(ch, 0);
+      }
+    }
   }
 
   /**

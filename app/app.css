@@ -375,6 +375,56 @@ body {
   color: var(--color-white);
 }
 
+.dos-meter-label-muted {
+  background: var(--border-shadow) !important;
+  color: var(--text-disabled) !important;
+}
+
+.dos-meter-muted {
+  opacity: 0.5;
+}
+
+/* DOS 스타일 체크박스 (채널 뮤트용) */
+.dos-checkbox {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: normal;
+  cursor: pointer;
+  background: var(--bg-main);
+  color: var(--text-main);
+  border-top: 2px solid var(--border-highlight);
+  border-left: 2px solid var(--border-highlight);
+  border-right: 2px solid var(--border-dark);
+  border-bottom: 2px solid var(--border-dark);
+  outline: none;
+  flex-shrink: 0;
+}
+
+.dos-checkbox:hover {
+  background: var(--border-light);
+}
+
+.dos-checkbox:active {
+  border-top: 2px solid var(--border-dark);
+  border-left: 2px solid var(--border-dark);
+  border-right: 2px solid var(--border-highlight);
+  border-bottom: 2px solid var(--border-highlight);
+}
+
+.dos-checkbox-muted {
+  background: #505050 !important;
+  color: var(--color-white) !important;
+  border-top: 2px solid var(--border-dark);
+  border-left: 2px solid var(--border-dark);
+  border-right: 2px solid var(--border-highlight);
+  border-bottom: 2px solid var(--border-highlight);
+}
+
 .dos-meter-segments {
   display: flex;
   gap: 1px;

@@ -96,4 +96,7 @@ export interface IMSPlaybackState {
 
   /** 각 채널의 악기명 */
   instrumentNames?: string[];
+
+  /** 각 채널의 뮤트 상태 (디버깅용) */
+  channelMuted?: boolean[];
 }

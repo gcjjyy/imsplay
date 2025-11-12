@@ -8,9 +8,11 @@ interface DosMeterProps {
   label: string;
   value: number; // 0-127
   maxValue?: number;
+  isMuted?: boolean;
+  onToggle?: () => void;
 }
 
-export default function DosMeter({ label, value, maxValue = 127 }: DosMeterProps) {
+export default function DosMeter({ label, value, maxValue = 127, isMuted = false, onToggle }: DosMeterProps) {
   const [displayValue, setDisplayValue] = useState(value);
   const animationFrameRef = useRef<number | null>(null);
 
@@ -53,10 +55,25 @@ export default function DosMeter({ label, value, maxValue = 127 }: DosMeterProps
   // 뱅크에 없는 악기 체크 ("!"로 시작)
   const isMissing = label.startsWith("!");
   const displayLabel = isMissing ? label.substring(1) : label;
-  const labelClass = isMissing ? "dos-meter-label-left dos-meter-label-missing" : "dos-meter-label-left";
+  let labelClass = "dos-meter-label-left";
+  if (isMissing) {
+    labelClass += " dos-meter-label-missing";
+  }
+  if (isMuted) {
+    labelClass += " dos-meter-label-muted";
+  }
 
   return (
-    <div className="dos-meter-horizontal">
+    <div className={`dos-meter-horizontal ${isMuted ? 'dos-meter-muted' : ''}`}>
+      {onToggle && (
+        <button
+          className={`dos-checkbox ${isMuted ? 'dos-checkbox-muted' : ''}`}
+          onClick={onToggle}
+          aria-label={isMuted ? "채널 켜기" : "채널 끄기"}
+        >
+          M
+        </button>
+      )}
       <div className={labelClass}>{displayLabel}</div>
       <div className="dos-meter-segments">
         {Array.from({ length: totalSegments }).map((_, index) => {

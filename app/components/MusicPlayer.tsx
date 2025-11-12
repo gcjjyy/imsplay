@@ -429,6 +429,8 @@ export default function MusicPlayer() {
           <ChannelVisualizer
             channelVolumes={state?.currentVolumes ?? Array(11).fill(0)}
             instrumentNames={state?.instrumentNames}
+            channelMuted={state?.channelMuted ?? Array(11).fill(false)}
+            onToggleChannel={format === "IMS" ? imsPlayer.toggleChannel : format === "ROL" ? rolPlayer.toggleChannel : imsPlayer.toggleChannel}
           />
 
           {/* 크레딧 */}

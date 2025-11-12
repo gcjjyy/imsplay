@@ -32,6 +32,7 @@ interface UseROLPlayerReturn {
   setKeyTranspose: (key: number) => void;
   setChannelVolume: (channel: number, volume: number) => void;
   setLoopEnabled: (enabled: boolean) => void;
+  toggleChannel: (ch: number) => void;
 }
 
 /**
@@ -44,6 +45,9 @@ export function useROLPlayer({
   const [state, setState] = useState<PlaybackState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 채널 뮤트 상태 (재생 전에도 설정 가능)
+  const [channelMuted, setChannelMuted] = useState<boolean[]>(new Array(11).fill(false));
 
   const playerRef = useRef<ROLPlayer | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -119,6 +123,13 @@ export function useROLPlayer({
         await player.initialize(audioContext.sampleRate);
         console.log("[initializePlayer] ROLPlayer initialize 완료");
 
+        // 채널 뮤트 상태 적용
+        for (let i = 0; i < channelMuted.length; i++) {
+          if (channelMuted[i]) {
+            player.toggleChannel(i);
+          }
+        }
+
         if (cancelled) {
           console.log("[initializePlayer] cancelled=true (after initialize), 종료");
           return;
@@ -144,6 +155,7 @@ export function useROLPlayer({
         setState({
           ...player.getState(),
           fileName: rolFile.name,
+          channelMuted: channelMuted.slice(0, rolData.channelNum),
         });
         setIsLoading(false);
         console.log("[initializePlayer] 완료! fileName:", rolFile.name);
@@ -407,6 +419,54 @@ export function useROLPlayer({
     playerRef.current.setLoopEnabled(enabled);
   }, []);
 
+  const toggleChannel = useCallback((ch: number) => {
+    // Hook의 뮤트 상태 업데이트
+    setChannelMuted(prev => {
+      const newMuted = [...prev];
+      newMuted[ch] = !newMuted[ch];
+      return newMuted;
+    });
+
+    // 플레이어가 있으면 플레이어에도 적용
+    if (playerRef.current) {
+      playerRef.current.toggleChannel(ch);
+      setState({
+        ...playerRef.current.getState(),
+        fileName: fileNameRef.current,
+      });
+    } else {
+      // 플레이어가 없어도 state 업데이트 (UI 반영용)
+      setState(prev => {
+        const newChannelMuted = [...(prev?.channelMuted || new Array(11).fill(false))];
+        newChannelMuted[ch] = !newChannelMuted[ch];
+
+        // state가 없으면 기본 state 생성
+        if (!prev) {
+          return {
+            isPlaying: false,
+            isPaused: false,
+            currentByte: 0,
+            totalSize: 0,
+            tempo: 100,
+            volume: 100,
+            keyTranspose: 0,
+            channelVolumes: Array(11).fill(127),
+            currentTempo: 0,
+            currentVolumes: Array(11).fill(0),
+            instrumentNames: [],
+            channelMuted: newChannelMuted,
+            fileName: "",
+          };
+        }
+
+        return {
+          ...prev,
+          channelMuted: newChannelMuted,
+        };
+      });
+    }
+  }, []);
+
   return {
     state,
     isLoading,
@@ -419,5 +479,6 @@ export function useROLPlayer({
     setKeyTranspose,
     setChannelVolume,
     setLoopEnabled,
+    toggleChannel,
   };
 }

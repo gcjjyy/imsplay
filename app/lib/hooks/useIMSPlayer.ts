@@ -30,6 +30,7 @@ interface UseIMSPlayerReturn {
   setVolume: (volume: number) => void;
   setTempo: (tempo: number) => void;
   setLoopEnabled: (enabled: boolean) => void;
+  toggleChannel: (ch: number) => void;
 }
 
 /**
@@ -42,6 +43,9 @@ export function useIMSPlayer({
   const [state, setState] = useState<IMSPlaybackState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 채널 뮤트 상태 (재생 전에도 설정 가능)
+  const [channelMuted, setChannelMuted] = useState<boolean[]>(new Array(11).fill(false));
 
   const playerRef = useRef<IMSPlayer | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -118,6 +122,13 @@ export function useIMSPlayer({
         await player.initialize(audioContext.sampleRate);
         console.log("[initializePlayer] IMSPlayer initialize 완료");
 
+        // 채널 뮤트 상태 적용
+        for (let i = 0; i < channelMuted.length; i++) {
+          if (channelMuted[i]) {
+            player.toggleChannel(i);
+          }
+        }
+
         if (cancelled) {
           console.log("[initializePlayer] cancelled=true (after initialize), 종료");
           return;
@@ -147,6 +158,7 @@ export function useIMSPlayer({
         setState({
           ...player.getState(),
           fileName: imsFile.name,
+          channelMuted: channelMuted.slice(0, imsData.chNum),
         });
         setIsLoading(false);
         console.log("[initializePlayer] 완료! fileName:", imsFile.name);
@@ -441,6 +453,53 @@ export function useIMSPlayer({
     playerRef.current.setLoopEnabled(enabled);
   }, []);
 
+  const toggleChannel = useCallback((ch: number) => {
+    // Hook의 뮤트 상태 업데이트
+    setChannelMuted(prev => {
+      const newMuted = [...prev];
+      newMuted[ch] = !newMuted[ch];
+      return newMuted;
+    });
+
+    // 플레이어가 있으면 플레이어에도 적용
+    if (playerRef.current) {
+      playerRef.current.toggleChannel(ch);
+      setState({
+        ...playerRef.current.getState(),
+        fileName: fileNameRef.current,
+      });
+    } else {
+      // 플레이어가 없어도 state 업데이트 (UI 반영용)
+      setState(prev => {
+        const newChannelMuted = [...(prev?.channelMuted || new Array(11).fill(false))];
+        newChannelMuted[ch] = !newChannelMuted[ch];
+
+        // state가 없으면 기본 state 생성
+        if (!prev) {
+          return {
+            isPlaying: false,
+            isPaused: false,
+            currentByte: 0,
+            totalSize: 0,
+            tempo: 100,
+            volume: 100,
+            currentTempo: 0,
+            currentVolumes: Array(11).fill(0),
+            instrumentNames: [],
+            channelMuted: newChannelMuted,
+            fileName: "",
+            songName: "",
+          };
+        }
+
+        return {
+          ...prev,
+          channelMuted: newChannelMuted,
+        };
+      });
+    }
+  }, []);
+
   return {
     state,
     isLoading,
@@ -451,5 +510,6 @@ export function useIMSPlayer({
     setVolume,
     setTempo,
     setLoopEnabled,
+    toggleChannel,
   };
 }

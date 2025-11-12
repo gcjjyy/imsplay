@@ -153,6 +153,7 @@ export interface PlaybackState {
   currentTempo: number;     // 현재 템포 값
   currentVolumes: number[]; // 각 채널의 현재 볼륨
   instrumentNames?: string[]; // 각 채널의 악기명
+  channelMuted?: boolean[]; // 각 채널의 뮤트 상태 (디버깅용)
 }
 
 /**
