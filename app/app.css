@@ -109,12 +109,14 @@ body {
 
 /* Container - 800x600 resolution */
 .dos-container {
-  width: 800px;
-  height: 600px;
+  max-width: 800px;
+  width: 100%;
+  min-height: 600px;
   margin: 20px auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 0 10px;
 }
 
 /* Panel */
@@ -568,7 +570,35 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .dos-container {
+    margin: 10px auto;
+    padding: 0 5px;
+    min-height: auto;
+    height: auto;
+  }
+
   .dos-grid-2col {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .dos-meter-label-left {
+    width: 80px;
+    font-size: 14px;
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  .dos-button,
+  .dos-list-item,
+  .dos-panel-title,
+  .dos-slider-label,
+  .dos-slider-value,
+  .dos-title-bar,
+  .dos-status-bar,
+  .dos-badge {
+    font-size: 14px;
   }
 }

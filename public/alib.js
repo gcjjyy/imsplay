@@ -1672,31 +1672,41 @@ ptYAALYycAC1FgAApSAAALU2cACyFQAAthIAALI1AACmawAAtjHUAA==`);
     source.start();
     audioCtx.suspend();
     console.log('Ready');
-    document.getElementById('play').onclick = () => {
-        audioCtx.resume();
-        console.log('Play');
-    };
-    document.getElementById('pause').onclick = () => {
-        audioCtx.suspend();
-        console.log('Pause');
-    };
+    const playBtn = document.getElementById('play');
+    if (playBtn) {
+        playBtn.onclick = () => {
+            audioCtx.resume();
+            console.log('Play');
+        };
+    }
+    const pauseBtn = document.getElementById('pause');
+    if (pauseBtn) {
+        pauseBtn.onclick = () => {
+            audioCtx.suspend();
+            console.log('Pause');
+        };
+    }
     for (let i = 0; i < 9; i++) {
         mute[i] = false;
         const ct = document.getElementById('ch' + i);
-        ct.className = 'play';
-        ct.onclick = ev => {
-            mute[i] = !mute[i];
-            ev.target.className = mute[i] ? 'mute' : 'play';
-        };
+        if (ct) {
+            ct.className = 'play';
+            ct.onclick = ev => {
+                mute[i] = !mute[i];
+                ev.target.className = mute[i] ? 'mute' : 'play';
+            };
+        }
     }
     for (let i = 0; i < 5; i++) {
         const ct = document.getElementById('p' + i);
-        ct.className = 'play';
-        ct.onclick = ev => {
-            muteperc ^= 1 << i;
-            const muted = !!(muteperc & (1 << i));
-            ev.target.className = muted ? 'mute' : 'play';
-        };
+        if (ct) {
+            ct.className = 'play';
+            ct.onclick = ev => {
+                muteperc ^= 1 << i;
+                const muted = !!(muteperc & (1 << i));
+                ev.target.className = muted ? 'mute' : 'play';
+            };
+        }
     }
 })(example || (example = {}));
 //# sourceMappingURL=alib.js.map
