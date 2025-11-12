@@ -177,6 +177,12 @@ export default function MusicPlayer() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const playStartTimeRef = useRef<number | null>(null);
   const prevCurrentByteRef = useRef<number>(0);
+  const stateRef = useRef(state);
+
+  // state를 ref에 저장 (interval 내부에서 최신 값 접근)
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     if (state?.isPlaying && !playStartTimeRef.current) {
@@ -186,16 +192,20 @@ export default function MusicPlayer() {
     } else if (!state?.isPlaying) {
       playStartTimeRef.current = null;
     }
+  }, [state?.isPlaying, state?.currentByte]);
 
+  useEffect(() => {
     if (state?.isPlaying) {
       const interval = setInterval(() => {
-        if (playStartTimeRef.current && state) {
+        if (playStartTimeRef.current && stateRef.current) {
+          const currentByte = stateRef.current.currentByte;
+
           // 루프 감지: currentByte가 이전보다 크게 감소하면 재생 시간 리셋
-          if (prevCurrentByteRef.current > state.currentByte + 100) {
+          if (prevCurrentByteRef.current > currentByte + 100) {
             playStartTimeRef.current = Date.now();
             setElapsedSeconds(0);
           }
-          prevCurrentByteRef.current = state.currentByte;
+          prevCurrentByteRef.current = currentByte;
 
           const elapsed = Math.floor((Date.now() - playStartTimeRef.current) / 1000);
           setElapsedSeconds(elapsed);
@@ -204,7 +214,7 @@ export default function MusicPlayer() {
 
       return () => clearInterval(interval);
     }
-  }, [state?.isPlaying, state]);
+  }, [state?.isPlaying]);
 
   // 시간 포맷팅 함수 (초 -> mm:ss)
   const formatTime = (seconds: number): string => {
