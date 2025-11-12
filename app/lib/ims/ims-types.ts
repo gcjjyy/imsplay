@@ -70,6 +70,9 @@ export interface IMSPlaybackState {
   /** 로드된 파일명 (옵셔널, 훅에서 추가) */
   fileName?: string;
 
+  /** 곡 이름 */
+  songName?: string;
+
   /** 재생 중 여부 */
   isPlaying: boolean;
 
@@ -79,8 +82,14 @@ export interface IMSPlaybackState {
   /** 현재 바이트 위치 */
   currentByte: number;
 
+  /** 현재 tick 위치 */
+  currentTick: number;
+
   /** 전체 바이트 크기 */
   totalSize: number;
+
+  /** 전체 tick 수 */
+  totalTicks: number;
 
   /** 전체 재생 시간 (초) */
   totalDuration?: number;

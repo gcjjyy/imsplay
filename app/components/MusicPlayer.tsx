@@ -4,7 +4,7 @@
  * Impulse Tracker 스타일 DOS UI
  */
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useROLPlayer } from "~/lib/hooks/useROLPlayer";
 import { useIMSPlayer } from "~/lib/hooks/useIMSPlayer";
 import ChannelVisualizer from "./ChannelVisualizer";
@@ -171,50 +171,20 @@ export default function MusicPlayer() {
     }
   }, [autoPlay, state, play, format, selectedSample, musicFile]);
 
-  const progress = state ? (state.currentByte / state.totalSize) * 100 : 0;
+  // IMS는 currentTick, ROL은 currentByte를 사용
+  const progress = state
+    ? format === "IMS" && "currentTick" in state && "totalTicks" in state
+      ? (state.currentTick / state.totalTicks) * 100
+      : (state.currentByte / state.totalSize) * 100
+    : 0;
 
-  // 재생 시간 추적
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const playStartTimeRef = useRef<number | null>(null);
-  const prevCurrentByteRef = useRef<number>(0);
-  const stateRef = useRef(state);
-
-  // state를 ref에 저장 (interval 내부에서 최신 값 접근)
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-
-  useEffect(() => {
-    if (state?.isPlaying && !playStartTimeRef.current) {
-      playStartTimeRef.current = Date.now();
-      setElapsedSeconds(0);
-      prevCurrentByteRef.current = state.currentByte;
-    } else if (!state?.isPlaying) {
-      playStartTimeRef.current = null;
-    }
-  }, [state?.isPlaying, state?.currentByte]);
-
-  useEffect(() => {
-    if (state?.isPlaying) {
-      const interval = setInterval(() => {
-        if (playStartTimeRef.current && stateRef.current) {
-          const currentByte = stateRef.current.currentByte;
-
-          // 루프 감지: currentByte가 이전보다 크게 감소하면 재생 시간 리셋
-          if (prevCurrentByteRef.current > currentByte + 100) {
-            playStartTimeRef.current = Date.now();
-            setElapsedSeconds(0);
-          }
-          prevCurrentByteRef.current = currentByte;
-
-          const elapsed = Math.floor((Date.now() - playStartTimeRef.current) / 1000);
-          setElapsedSeconds(elapsed);
-        }
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [state?.isPlaying]);
+  // 재생 시간 계산 (tick 기반)
+  const totalDuration = state?.totalDuration || 0;
+  const elapsedSeconds = state && totalDuration > 0
+    ? format === "IMS" && "currentTick" in state && "totalTicks" in state
+      ? Math.floor((state.currentTick / state.totalTicks) * totalDuration)
+      : Math.floor((state.currentByte / state.totalSize) * totalDuration)
+    : 0;
 
   // 시간 포맷팅 함수 (초 -> mm:ss)
   const formatTime = (seconds: number): string => {
@@ -222,9 +192,6 @@ export default function MusicPlayer() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // 전체 시간 (파일에서 계산된 값 사용)
-  const totalDuration = state?.totalDuration || 0;
 
   // 샘플 리스트 아이템 생성
   const sampleListItems = MUSIC_SAMPLES.map((sample) => ({
