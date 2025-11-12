@@ -23,7 +23,7 @@ interface MusicSample {
 
 const MUSIC_SAMPLES: MusicSample[] = [
   // IMS 샘플
-  // { musicFile: "/4JSTAMNT.IMS", format: "IMS" },
+  { musicFile: "/4JSTAMNT.IMS", format: "IMS" },
   { musicFile: "/CUTE-LV2.IMS", format: "IMS" },
   // { musicFile: "/DBBP^LEE.IMS", format: "IMS" },
   // { musicFile: "/DBBP^LIM.IMS", format: "IMS" },
@@ -32,7 +32,13 @@ const MUSIC_SAMPLES: MusicSample[] = [
   // { musicFile: "/KNIGHT-!.IMS", format: "IMS" },
   { musicFile: "/NAUCIKA2.IMS", format: "IMS" },
   { musicFile: "/SIDE-END.IMS", format: "IMS" },
+  { musicFile: "/AMG0002.IMS", format: "IMS" },
+  { musicFile: "/AMG0008.IMS", format: "IMS" },
+  { musicFile: "/AMG0011.IMS", format: "IMS" },
+  { musicFile: "/AMG0014.IMS", format: "IMS" },
+  { musicFile: "/AMG0015.IMS", format: "IMS" },
   { musicFile: "/AMG0018.IMS", format: "IMS" },
+  { musicFile: "/AMG0024.IMS", format: "IMS" },
 
   // ROL 샘플
   // { musicFile: "/4JSTAMNT.ROL", format: "ROL" },
