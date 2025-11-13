@@ -217,6 +217,20 @@ export default function MusicPlayer() {
     // state.fileName을 사용하여 정확히 해당 플레이어의 상태인지 확인
     const stateFileName = state?.fileName;
 
+    console.log('[autoPlay useEffect]', {
+      autoPlay,
+      hasState: !!state,
+      hasPlay: !!play,
+      format,
+      expectedFormat,
+      hasMusicFile: !!musicFile,
+      autoPlayFileName,
+      currentFileName,
+      stateFileName,
+      fileNameMatch: autoPlayFileName === currentFileName,
+      stateFileNameMatch: stateFileName === currentFileName
+    });
+
     if (
       autoPlay &&
       state &&
@@ -226,6 +240,7 @@ export default function MusicPlayer() {
       autoPlayFileName === currentFileName && // 파일명 일치 확인
       stateFileName === currentFileName // state의 fileName이 현재 파일과 일치하는지 확인!
     ) {
+      console.log('[autoPlay useEffect] 조건 만족, play() 호출');
       play();
       setAutoPlay(null); // 플래그 리셋
     }
@@ -311,11 +326,18 @@ export default function MusicPlayer() {
     const isAtEnd = state && !state.isPlaying && state.currentByte >= state.totalSize - 100;
     const isSampleFile = !!sampleMusicFile;
 
-    if (isAtEnd && musicFile && !isLoadingSample) {
+    // 파일명 검증: state의 fileName과 현재 musicFile.name이 일치해야 함
+    const stateFileName = state?.fileName;
+    const currentFileName = musicFile?.name;
+    const isCorrectFile = stateFileName === currentFileName;
+
+    if (isAtEnd && musicFile && !isLoadingSample && isCorrectFile) {
       console.log('[Track End Detection] 트랙 종료 감지!', {
         isSampleFile,
         repeatMode,
-        currentFile: musicFile.name
+        currentFile: musicFile.name,
+        stateFileName,
+        isCorrectFile
       });
 
       // 'all' 모드이고 샘플 파일인 경우만 다음 곡 재생
