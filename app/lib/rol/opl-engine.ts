@@ -155,7 +155,12 @@ export class OPLEngine {
    * SetVoiceTimbre() 포팅 (ADLIB.C:431-454)
    */
   setVoiceTimbre(voice: number, paramArray: number[]): void {
-    if (voice >= this.modeVoices) return;
+    console.log(`[setVoiceTimbre] voice:${voice} paramArray.length:${paramArray.length} modeVoices:${this.modeVoices} percussion:${this.percussion}`);
+
+    if (voice >= this.modeVoices) {
+      console.warn(`[setVoiceTimbre] ❌ voice(${voice}) >= modeVoices(${this.modeVoices}), early return`);
+      return;
+    }
 
     const wave0 = paramArray[2 * (constants.nbLocParam - 1)];
     const wave1 = paramArray[2 * (constants.nbLocParam - 1) + 1];
@@ -164,13 +169,18 @@ export class OPLEngine {
       ? constants.slotPVoice[voice]
       : constants.slotMVoice[voice];
 
+    console.log(`[setVoiceTimbre] wave0:${wave0} wave1:${wave1} slots:[${slots[0]}, ${slots[1]}]`);
+
     this.setSlotParam(slots[0], paramArray.slice(0, constants.nbLocParam - 1), wave0);
+    console.log(`[setVoiceTimbre] ✅ setSlotParam(slot:${slots[0]}) 완료`);
+
     if (slots[1] !== 255) {
       this.setSlotParam(
         slots[1],
         paramArray.slice(constants.nbLocParam - 1, 2 * (constants.nbLocParam - 1)),
         wave1
       );
+      console.log(`[setVoiceTimbre] ✅ setSlotParam(slot:${slots[1]}) 완료`);
     }
   }
 
@@ -195,6 +205,8 @@ export class OPLEngine {
 
   /**
    * SetVoicePitch() 포팅 (ADLIB.C:506-517)
+   * 원본 ADLIB.C는 voiceNote 값에 관계없이 항상 UpdateFNums를 호출합니다.
+   * ROL 파일에서는 피치 벤드가 노트보다 먼저 설정될 수 있으므로 조건 없이 호출해야 합니다.
    */
   setVoicePitch(voice: number, pitchBend: number): void {
     if ((!this.percussion && voice < 9) || voice <= constants.BD) {
@@ -202,13 +214,7 @@ export class OPLEngine {
         pitchBend = constants.MAX_PITCH;
       }
       this.vPitchBend[voice] = pitchBend;
-
-      // voiceNote가 0이면 UpdateFNums를 호출하지 않음
-      // (pitch=0일 때 octave=-1이 되어 잘못된 주파수가 설정되는 문제 방지)
-      // noteOn이 호출될 때 저장된 pitchBend 값으로 올바른 주파수가 설정됨
-      if (this.voiceNote[voice] !== 0) {
-        this.updateFNums(voice);
-      }
+      this.updateFNums(voice);
     }
   }
 
@@ -312,11 +318,14 @@ export class OPLEngine {
    * SetSlotParam() 포팅 (ADLIB.C:649-658)
    */
   private setSlotParam(slot: number, param: number[], waveSel: number): void {
+    console.log(`[setSlotParam] slot:${slot} param.length:${param.length} waveSel:${waveSel}`);
+
     for (let i = 0; i < constants.nbLocParam - 1; i++) {
       this.paramSlot[slot][i] = param[i];
     }
     this.paramSlot[slot][constants.nbLocParam - 1] = waveSel & 0x03;
 
+    console.log(`[setSlotParam] paramSlot[${slot}] 업데이트 완료, sndSetAllPrm 호출`);
     this.sndSetAllPrm(slot);
   }
 

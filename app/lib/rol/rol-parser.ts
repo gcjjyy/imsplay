@@ -22,8 +22,11 @@ export function parseROL(buffer: ArrayBuffer): ROLData {
   const tpb = reader.readUint16();
 
   // 오프셋 53: Drum mode - 1바이트
+  // EPLAYROL.C:163-165에서 D_MODE = !D_MODE로 논리 반전함
+  // 파일에 0 저장 = 퍼커션 모드(11채널), 1 저장 = 멜로디 모드(9채널)
   reader.seek(53);
-  const dMode = reader.readUint8();
+  const rawDMode = reader.readUint8();
+  const dMode = rawDMode === 0 ? 1 : 0; // 논리 반전
   const channelNum = 9 + 2 * dMode; // 9 or 11
 
   // 오프셋 197: Basic tempo - 4바이트 float

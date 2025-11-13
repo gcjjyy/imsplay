@@ -26,11 +26,11 @@ const MUSIC_SAMPLES: MusicSample[] = [
   // IMS 샘플
   { musicFile: "/4JSTAMNT.IMS", format: "IMS" },
   { musicFile: "/CUTE-LV2.IMS", format: "IMS" },
-  // { musicFile: "/DBBP^LEE.IMS", format: "IMS" },
-  // { musicFile: "/DBBP^LIM.IMS", format: "IMS" },
+  { musicFile: "/DBBP^LEE.IMS", format: "IMS" },
+  { musicFile: "/DBBP^LIM.IMS", format: "IMS" },
   { musicFile: "/DQUEST4A.IMS", format: "IMS" },
   { musicFile: "/FF5-LOGO.IMS", format: "IMS" },
-  // { musicFile: "/KNIGHT-!.IMS", format: "IMS" },
+  { musicFile: "/KNIGHT-!.IMS", format: "IMS" },
   { musicFile: "/NAUCIKA2.IMS", format: "IMS" },
   { musicFile: "/SIDE-END.IMS", format: "IMS" },
   { musicFile: "/AMG0002.IMS", format: "IMS" },
@@ -58,11 +58,11 @@ const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/TWINBEE2.IMS", format: "IMS" },
 
   // ROL 샘플
-  // { musicFile: "/4JSTAMNT.ROL", format: "ROL" },
-  // { musicFile: "/CUTE-LV2.ROL", format: "ROL" },
-  // { musicFile: "/FF5-LOGO.ROL", format: "ROL" },
-  // { musicFile: "/NAUCIKA2.ROL", format: "ROL" },
-  // { musicFile: "/SIDE-END.ROL", format: "ROL" },
+  { musicFile: "/4JSTAMNT.ROL", format: "ROL" },
+  { musicFile: "/CUTE-LV2.ROL", format: "ROL" },
+  { musicFile: "/FF5-LOGO.ROL", format: "ROL" },
+  { musicFile: "/NAUCIKA2.ROL", format: "ROL" },
+  { musicFile: "/SIDE-END.ROL", format: "ROL" },
 ];
 
 const BNK_FILE = "/STANDARD.BNK";
@@ -279,7 +279,7 @@ export default function MusicPlayer() {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.13
+        {" "}IMS/ROL 웹플레이어 v1.14
         {format && ` - ${format} 모드`}
       </div>
 

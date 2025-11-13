@@ -164,9 +164,9 @@ export function useROLPlayer({
       const lenFill = outputBuffer.length;
       let posFill = 0;
 
-      // 틱당 생성할 샘플 수 계산
+      // 틱당 생성할 샘플 수 계산 (정수로 반올림하여 누적 오차 방지)
       const tickDelay = player.getTickDelay(); // ms
-      const samplesPerTick = (audioContext.sampleRate * tickDelay) / 1000;
+      const samplesPerTick = Math.round((audioContext.sampleRate * tickDelay) / 1000);
 
       let loopCount = 0;
       while (posFill < lenFill) {

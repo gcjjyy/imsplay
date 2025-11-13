@@ -109,20 +109,29 @@ export function loadInstruments(
   buffer: ArrayBuffer,
   instrumentNames: string[]
 ): Map<string, number[]> {
+  console.log(`[loadInstruments] 요청된 악기 개수: ${instrumentNames.length}`);
+  console.log(`[loadInstruments] 요청된 악기 목록:`, instrumentNames);
+
   // 전체 악기 맵 생성
   const allInstruments = loadAllInstruments(buffer);
   const instruments = new Map<string, number[]>();
 
   // 요청된 악기들만 추출
+  let foundCount = 0;
+  let notFoundCount = 0;
   for (const insName of instrumentNames) {
     const params = allInstruments.get(insName.toLowerCase());
     if (params) {
       instruments.set(insName, params);
+      foundCount++;
+      console.log(`[loadInstruments] ✅ "${insName}" → BNK에서 찾음 (params 길이: ${params.length})`);
     } else {
-      console.warn(`[loadInstruments] 악기 "${insName}" 를 BNK 파일에서 찾을 수 없음`);
+      notFoundCount++;
+      console.warn(`[loadInstruments] ❌ "${insName}" → BNK에서 찾을 수 없음`);
     }
   }
 
+  console.log(`[loadInstruments] 결과: 성공 ${foundCount}개 / 실패 ${notFoundCount}개`);
   return instruments;
 }
 
