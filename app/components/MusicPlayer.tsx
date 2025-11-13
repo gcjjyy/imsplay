@@ -403,7 +403,7 @@ export default function MusicPlayer() {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.16
+        {" "}IMS/ROL 웹플레이어 v1.18
         {format && ` - ${format} 모드`}
       </div>
 
@@ -467,10 +467,10 @@ export default function MusicPlayer() {
           {/* 일시정지/정지 버튼 및 반복 모드 */}
           <DosPanel>
             <div className="flex gap-8">
-              <DosButton onClick={pause} disabled={!state || !state.isPlaying} variant="pause" style={{ flex: 1 }}>
+              <DosButton onClick={pause} disabled={!state || !state.isPlaying} variant="pause" style={{ flex: 1, padding: '2px 8px' }}>
                 일시정지
               </DosButton>
-              <DosButton onClick={stop} disabled={!state} variant="stop" style={{ flex: 1 }}>
+              <DosButton onClick={stop} disabled={!state} variant="stop" style={{ flex: 1, padding: '2px 8px' }}>
                 정지
               </DosButton>
 
@@ -480,8 +480,8 @@ export default function MusicPlayer() {
                   onClick={() => setRepeatMode('none')}
                   active={repeatMode === 'none'}
                   style={{
-                    width: '32px',
-                    height: '32px',
+                    width: '26px',
+                    height: '26px',
                     padding: '2px',
                     margin: 0,
                     display: 'flex',
@@ -495,14 +495,14 @@ export default function MusicPlayer() {
                     color: 'black'
                   }}
                 >
-                  <X size={14} />
+                  <X size={12} />
                 </DosButton>
                 <DosButton
                   onClick={() => setRepeatMode('all')}
                   active={repeatMode === 'all'}
                   style={{
-                    width: '32px',
-                    height: '32px',
+                    width: '26px',
+                    height: '26px',
                     padding: '2px',
                     margin: 0,
                     display: 'flex',
@@ -516,14 +516,14 @@ export default function MusicPlayer() {
                     color: 'black'
                   }}
                 >
-                  <Repeat size={14} />
+                  <Repeat size={12} />
                 </DosButton>
                 <DosButton
                   onClick={() => setRepeatMode('single')}
                   active={repeatMode === 'single'}
                   style={{
-                    width: '32px',
-                    height: '32px',
+                    width: '26px',
+                    height: '26px',
                     padding: '2px',
                     margin: 0,
                     display: 'flex',
@@ -537,7 +537,7 @@ export default function MusicPlayer() {
                     color: 'black'
                   }}
                 >
-                  <Repeat1 size={14} />
+                  <Repeat1 size={12} />
                 </DosButton>
               </div>
             </div>
