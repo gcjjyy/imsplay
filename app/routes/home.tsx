@@ -48,7 +48,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 
       titleMap[fileName] = songName || fileName.replace('.IMS', '');
     } catch (error) {
-      console.error(`[loader] ${fileName} 제목 로드 실패:`, error);
       titleMap[fileName] = fileName.replace('.IMS', '');
     }
   }
