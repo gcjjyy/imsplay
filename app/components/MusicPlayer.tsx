@@ -914,12 +914,18 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
             {/* 재생 컨트롤 (일시정지/정지만) */}
             <div className="flex gap-8">
               <DosButton
-                onClick={pause}
-                disabled={!state || !state.isPlaying}
-                variant="pause"
+                onClick={() => {
+                  if (state?.isPaused) {
+                    play();
+                  } else {
+                    pause();
+                  }
+                }}
+                disabled={!state || (!state.isPlaying && !state.isPaused)}
+                variant={state?.isPaused ? "play" : "pause"}
                 style={{ flex: 1, padding: '2px 8px' }}
               >
-                일시정지
+                {state?.isPaused ? '재생' : '일시정지'}
               </DosButton>
               <DosButton
                 onClick={stop}
