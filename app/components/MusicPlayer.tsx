@@ -48,7 +48,6 @@ const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/GRAD2-2.IMS", format: "IMS" },
   { musicFile: "/GRAD2-3.IMS", format: "IMS" },
   { musicFile: "/GRAD2-4.IMS", format: "IMS" },
-  { musicFile: "/GRAD3-1.IMS", format: "IMS" },
   { musicFile: "/GRAD3-2.IMS", format: "IMS" },
   { musicFile: "/JAM-FIVE.IMS", format: "IMS" },
   { musicFile: "/JAM-NADI.IMS", format: "IMS" },
@@ -56,8 +55,6 @@ const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/MACROS2.IMS", format: "IMS" },
   { musicFile: "/P_013.IMS", format: "IMS" },
   { musicFile: "/SPI0082.IMS", format: "IMS" },
-  { musicFile: "/TWINBEE1.IMS", format: "IMS" },
-  { musicFile: "/TWINBEE2.IMS", format: "IMS" },
 
   // ROL 샘플
   { musicFile: "/4JSTAMNT.ROL", format: "ROL" },
