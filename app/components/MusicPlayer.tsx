@@ -238,6 +238,11 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
    * 파일 목록 처리 (폴더 선택 or 드래그 앤 드롭 공통 로직)
    */
   const processFiles = useCallback(async (files: File[], providedFolderName?: string) => {
+    // 현재 재생 중인 음악 멈추기
+    if (state) {
+      stop();
+    }
+
     // 폴더명 먼저 결정
     let folderName: string = providedFolderName || "";
     if (!folderName) {
@@ -324,7 +329,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     } finally {
       setIsProcessingFiles(false); // 로딩 완료
     }
-  }, [fetcher]);
+  }, [fetcher, state, stop]);
 
   /**
    * 폴더 선택 핸들러 (input)
@@ -815,6 +820,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                 onClick={() => (window as any).__folderInput?.click()}
                 style={{
                   flex: 1,
+                  height: '26px',
                   borderTop: isDragging ? '2px solid var(--color-yellow)' : '2px solid white',
                   borderLeft: isDragging ? '2px solid var(--color-yellow)' : '2px solid white',
                   borderBottom: isDragging ? '2px solid var(--color-yellow)' : '2px solid black',
@@ -827,6 +833,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  boxSizing: 'border-box',
                 }}
               >
                 <span style={{ color: isDragging ? 'var(--color-yellow)' : 'black' }}>
