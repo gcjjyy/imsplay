@@ -32,7 +32,7 @@ export class IMSPlayer {
   private SPEED: number = 100;  // 템포 배속 (100 = 1x)
 
   private isPlaying: boolean = false;
-  private loopEnabled: boolean = true;
+  private loopEnabled: boolean = false;
   private totalTicks: number = 0;  // 전체 틱 수 (계산됨)
 
   constructor(imsData: IMSData, bnkBuffer: ArrayBuffer, oplEngine: OPLEngine) {

@@ -39,7 +39,7 @@ export class ROLPlayer {
   private channelMuted: boolean[] = new Array(11).fill(false);  // 채널 뮤트 상태 (디버깅용)
 
   private isPlaying: boolean = false;
-  private loopEnabled: boolean = true;
+  private loopEnabled: boolean = false;
 
   constructor(rolData: ROLData, bnkBuffer: ArrayBuffer, oplEngine: OPLEngine) {
     this.rolData = rolData;
