@@ -955,6 +955,9 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                     : '--:-- / --:--'
                   }
                 </div>
+                <div className="dos-progress-text" style={{ position: 'absolute', right: '8px' }}>
+                  BPM: {state?.currentTempo ? Math.floor(state.currentTempo) : '--'}
+                </div>
               </div>
             </div>
 
@@ -1046,16 +1049,13 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       {/* 스테이터스 바 */}
       <div className="dos-status-bar">
         <div className="dos-status-item">
-          상태: {state ? (
+          {state ? (
             state.isPlaying
               ? `재생중 - ${currentTrackTitle} (${currentMusicFile?.name || '?'}${currentBnkFile?.name ? ', ' + currentBnkFile.name : ''})`
               : state.isPaused
                 ? "일시정지"
                 : "정지"
           ) : "대기"}
-        </div>
-        <div className="dos-status-item">
-          BPM: {state?.currentTempo ? Math.floor(state.currentTempo) : '--'}
         </div>
       </div>
     </div>
