@@ -665,7 +665,6 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
               </DosButton>
             </div>
           ),
-          onClick: () => setCurrentTrackIndex(index),
         };
       });
     } else {
@@ -698,31 +697,30 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
             </DosButton>
           </div>
         ),
-        onClick: () => setCurrentTrackIndex(index),
       }));
     }
   }, [isUserFolder, userMusicFiles, userMusicFileTitles, musicSamples, isLoadingTrack, state?.isPlaying, stop, loadTrack]);
 
-  // 선택된 트랙의 키
+  // 선택된 트랙의 키 (재생 중인 곡 기준으로 포커스)
   const selectedKey = useMemo(() => {
     if (isUserFolder) {
-      const file = userMusicFiles[currentTrackIndex];
-      return file ? `${currentTrackIndex}-${file.name}` : "";
+      const file = userMusicFiles[playingTrackIndex];
+      return file ? `${playingTrackIndex}-${file.name}` : "";
     } else {
-      return musicSamples[currentTrackIndex]?.musicFile || "";
+      return musicSamples[playingTrackIndex]?.musicFile || "";
     }
-  }, [isUserFolder, userMusicFiles, musicSamples, currentTrackIndex]);
+  }, [isUserFolder, userMusicFiles, musicSamples, playingTrackIndex]);
 
-  // 현재 트랙 제목 (상태바 표시용)
+  // 현재 트랙 제목 (상태바 표시용 - 재생 중인 곡 기준)
   const currentTrackTitle = useMemo(() => {
     if (isUserFolder) {
-      const file = userMusicFiles[currentTrackIndex];
+      const file = userMusicFiles[playingTrackIndex];
       if (!file) return '?';
       return userMusicFileTitles.get(file.name) || file.name.replace(/\.(ims|rol)$/i, '');
     } else {
-      return musicSamples[currentTrackIndex]?.title || currentMusicFile?.name || '?';
+      return musicSamples[playingTrackIndex]?.title || currentMusicFile?.name || '?';
     }
-  }, [isUserFolder, userMusicFiles, userMusicFileTitles, musicSamples, currentTrackIndex, currentMusicFile]);
+  }, [isUserFolder, userMusicFiles, userMusicFileTitles, musicSamples, playingTrackIndex, currentMusicFile]);
 
   return (
     <div className="dos-container">
