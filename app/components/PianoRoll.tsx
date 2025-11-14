@@ -11,7 +11,8 @@ interface PianoRollProps {
   activeNotes?: Array<{ channel: number; note: number }>;
 }
 
-// 활성 노트 색상
+// 건반 색상
+const BLACK_KEY_COLOR = '#2A2A2A'; // 아주 짙은 회색
 const ACTIVE_WHITE_KEY_COLOR = '#C0C0C0'; // 회색 (VGA Silver)
 const ACTIVE_BLACK_KEY_COLOR = '#808080'; // 짙은 회색 (VGA Gray)
 
@@ -67,7 +68,13 @@ export default function PianoRoll({ activeNotes = [] }: PianoRollProps) {
           className="piano-key-black"
           style={{
             left: `${whiteKeyIndex * (100 / 52)}%`, // 52개의 흰 건반 기준
-            backgroundColor: isActive ? ACTIVE_BLACK_KEY_COLOR : '#000000',
+            backgroundColor: isActive ? ACTIVE_BLACK_KEY_COLOR : BLACK_KEY_COLOR,
+            ...(isActive && {
+              borderTopColor: '#A0A0A0',
+              borderLeftColor: '#A0A0A0',
+              borderRightColor: '#404040',
+              borderBottomColor: '#404040',
+            })
           }}
         />
       );
@@ -79,6 +86,10 @@ export default function PianoRoll({ activeNotes = [] }: PianoRollProps) {
           className="piano-key-white"
           style={{
             backgroundColor: isActive ? ACTIVE_WHITE_KEY_COLOR : '#FFFFFF',
+            ...(isActive && {
+              borderLeftColor: '#FFFFFF',
+              borderBottomColor: '#808080',
+            })
           }}
         />
       );

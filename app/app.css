@@ -739,9 +739,11 @@ body {
   flex: 1;
   height: 100%;
   background: var(--color-white);
-  border-right: 1px solid var(--border-shadow);
-  border-bottom: 2px solid var(--border-shadow);
+  border-left: 1px solid #E0E0E0;
+  border-right: 1px solid #A0A0A0;
+  border-bottom: 4px solid #A0A0A0;
   transition: background-color 0.05s;
+  box-sizing: border-box;
 }
 
 .piano-keys-black {
@@ -757,11 +759,11 @@ body {
   position: absolute;
   width: 1.2%;
   height: 100%;
-  background: var(--color-black);
-  border-top: 1px solid var(--border-shadow);
-  border-left: 1px solid var(--border-shadow);
-  border-right: 1px solid var(--color-black);
-  border-bottom: 1px solid var(--color-black);
+  background: #2A2A2A;
+  border-top: 1px solid #808080;
+  border-left: 2.5px solid #808080;
+  border-right: 2.5px solid var(--color-black);
+  border-bottom: 3px solid var(--color-black);
   transform: translateX(-50%);
   transition: background-color 0.05s;
   z-index: 1;
