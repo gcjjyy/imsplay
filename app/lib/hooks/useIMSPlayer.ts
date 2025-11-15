@@ -65,6 +65,9 @@ export function useIMSPlayer({
   // 생성해야 할 샘플 수 (예제와 같은 방식)
   const lenGenRef = useRef<number>(0);
 
+  // 백그라운드 진입 전 재생 상태 저장
+  const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
+
   /**
    * IMS/BNK 파일 로드 및 플레이어 초기화
    */
@@ -277,6 +280,82 @@ export function useIMSPlayer({
     lenGenRef.current = 0;
     // playerRef는 initializePlayer 시작 시 null로 설정됨
   }, []);
+
+  /**
+   * Page Visibility API: 백그라운드/포그라운드 전환 처리
+   */
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!playerRef.current || !audioContextRef.current) {
+        return;
+      }
+
+      const audioContext = audioContextRef.current;
+      const player = playerRef.current;
+
+      if (document.hidden) {
+        // 백그라운드 진입: 재생 상태 저장 및 UI 타이머 일시정지
+        wasPlayingBeforeBackgroundRef.current = player.getState().isPlaying;
+
+        // UI 업데이트 타이머 일시정지 (배터리 절약)
+        if (uiUpdateIntervalRef.current) {
+          clearInterval(uiUpdateIntervalRef.current);
+          uiUpdateIntervalRef.current = null;
+        }
+      } else {
+        // 포그라운드 복귀: AudioContext resume 시도
+        if (audioContext.state === "suspended") {
+          try {
+            await audioContext.resume();
+            console.log('[useIMSPlayer] AudioContext resumed after returning from background');
+          } catch (error) {
+            console.error('[useIMSPlayer] Failed to resume AudioContext:', error);
+          }
+        }
+
+        // 이전에 재생 중이었다면 자동 재개
+        if (wasPlayingBeforeBackgroundRef.current && !player.getState().isPlaying) {
+          // 플레이어 재생 재개
+          player.play();
+          lenGenRef.current = 0;
+
+          // UI 타이머 재시작
+          uiUpdateIntervalRef.current = setInterval(() => {
+            if (playerRef.current) {
+              setState({
+                ...playerRef.current.getState(),
+                fileName: fileNameRef.current,
+              });
+            }
+          }, 33);
+
+          // 즉시 상태 업데이트
+          setState({
+            ...player.getState(),
+            fileName: fileNameRef.current,
+          });
+        } else if (player.getState().isPlaying) {
+          // 이미 재생 중이지만 UI 타이머가 꺼져있다면 재시작
+          if (!uiUpdateIntervalRef.current) {
+            uiUpdateIntervalRef.current = setInterval(() => {
+              if (playerRef.current) {
+                setState({
+                  ...playerRef.current.getState(),
+                  fileName: fileNameRef.current,
+                });
+              }
+            }, 33);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []); // dependency 없음 - ref를 통해 최신 값 접근
 
 
   /**
