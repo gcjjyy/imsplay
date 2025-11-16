@@ -158,6 +158,8 @@ body {
   margin-bottom: 4px;
   color: var(--text-main);
   font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Button */
@@ -594,13 +596,14 @@ body {
   color: var(--color-white);
   padding: 5px 8px;
   font-weight: normal;
-  text-transform: uppercase;
   font-size: 16px;
   border-top: 2px solid var(--border-highlight);
   border-left: 2px solid var(--border-highlight);
   border-right: 2px solid var(--border-dark);
   border-bottom: 2px solid var(--border-dark);
   flex-shrink: 0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .dos-title-bar a {
@@ -628,6 +631,8 @@ body {
   font-size: 16px;
   font-weight: normal;
   flex-shrink: 0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .dos-status-item {
@@ -803,6 +808,9 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Responsive */

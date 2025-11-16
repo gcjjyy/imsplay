@@ -298,13 +298,69 @@ export function useROLPlayer({
           uiUpdateIntervalRef.current = null;
         }
       } else {
-        // 포그라운드 복귀: AudioContext resume 시도
-        if (audioContext.state === "suspended") {
+        // 포그라운드 복귀: AudioContext 상태 확인 및 복구
+        console.log('[useROLPlayer] Returning from background. AudioContext state:', audioContext.state);
+
+        if (audioContext.state === "closed") {
+          // iOS Safari가 AudioContext를 완전히 종료함 → 재생성 필요
           try {
-            await audioContext.resume();
+            console.log('[useROLPlayer] AudioContext is closed. Recreating...');
+
+            // 새 AudioContext 생성
+            const newAudioContext = new AudioContext();
+            audioContextRef.current = newAudioContext;
+
+            // AudioContext resume (새로 생성된 컨텍스트도 suspended일 수 있음)
+            if (newAudioContext.state === "suspended") {
+              const resumePromise = newAudioContext.resume();
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('AudioContext resume timeout')), 3000)
+              );
+              await Promise.race([resumePromise, timeoutPromise]);
+            }
+
+            // ScriptProcessorNode 재생성
+            if (processorRef.current) {
+              processorRef.current.disconnect();
+              processorRef.current = null;
+            }
+            initializeAudioProcessor(newAudioContext);
+
+            console.log('[useROLPlayer] AudioContext recreated successfully');
+          } catch (error) {
+            console.error('[useROLPlayer] Failed to recreate AudioContext:', error);
+          }
+        } else if (audioContext.state === "suspended") {
+          // 일반적인 suspended 상태 → resume 시도
+          try {
+            const resumePromise = audioContext.resume();
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('AudioContext resume timeout')), 3000)
+            );
+            await Promise.race([resumePromise, timeoutPromise]);
             console.log('[useROLPlayer] AudioContext resumed after returning from background');
           } catch (error) {
             console.error('[useROLPlayer] Failed to resume AudioContext:', error);
+            // resume 실패 시 재생성 시도
+            try {
+              console.log('[useROLPlayer] Attempting to recreate AudioContext after resume failure...');
+              const newAudioContext = new AudioContext();
+              audioContextRef.current = newAudioContext;
+
+              if (newAudioContext.state === "suspended") {
+                await newAudioContext.resume();
+              }
+
+              if (processorRef.current) {
+                processorRef.current.disconnect();
+                processorRef.current = null;
+              }
+              initializeAudioProcessor(newAudioContext);
+
+              console.log('[useROLPlayer] AudioContext recreated after resume failure');
+            } catch (recreateError) {
+              console.error('[useROLPlayer] Failed to recreate AudioContext:', recreateError);
+            }
           }
         }
 
