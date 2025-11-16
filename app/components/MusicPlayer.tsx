@@ -228,6 +228,16 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const player = format === "ROL" ? rolPlayer : imsPlayer;
   const { state, error, isPlayerReady, play, pause, stop, setVolume, setTempo, setMasterVolume, checkPlayerReady } = player;
 
+  // Format-aware ready state (IMS↔ROL 전환 시 auto-play가 올바르게 작동하도록)
+  const isCurrentPlayerReady = useMemo(() => {
+    if (!format || !currentMusicFile) return false;
+
+    const expectedFormat = currentMusicFile.name.toLowerCase().endsWith('.rol') ? 'ROL' : 'IMS';
+    if (format !== expectedFormat) return false;
+
+    return format === 'ROL' ? rolPlayer.isPlayerReady : imsPlayer.isPlayerReady;
+  }, [format, currentMusicFile, rolPlayer.isPlayerReady, imsPlayer.isPlayerReady]);
+
   // 음악 리스트 결정 (사용자 폴더 or 샘플)
   const isUserFolder = userFolderName && userMusicFiles.length > 0;
   const musicList = isUserFolder ? userMusicFiles : musicSamples;
@@ -560,6 +570,11 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       return;
     }
 
+    // Format-aware ready check (IMS↔ROL 전환 시 올바른 플레이어 체크)
+    if (!isCurrentPlayerReady) {
+      return;
+    }
+
     // playerRef 직접 확인 (stale state 회피)
     if (!checkPlayerReady()) {
       return;
@@ -572,7 +587,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       play();
       setAutoPlay(false);
     }
-  }, [autoPlay, isPlayerReady, state, play, format, currentMusicFile, checkPlayerReady]);
+  }, [autoPlay, isCurrentPlayerReady, state, play, format, currentMusicFile, checkPlayerReady]);
 
   /**
    * 플레이어 초기화 시 마스터 볼륨 설정
@@ -581,7 +596,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     if (state && setMasterVolume) {
       setMasterVolume(masterVolume);
     }
-  }, [state, currentMusicFile]);
+  }, [state, currentMusicFile, setMasterVolume, masterVolume]);
 
   /**
    * 반복 모드에 따라 플레이어의 loopEnabled 설정
@@ -948,7 +963,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.38
+        {" "}IMS/ROL 웹플레이어 v1.39
       </div>
 
       {/* 메인 그리드 */}
