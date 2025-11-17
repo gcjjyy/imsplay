@@ -17,7 +17,7 @@ export class ROLPlayer {
   private oplEngine: OPLEngine;
 
   // 재생 상태 (EPLAYROL.C의 전역 변수들)
-  private CH_VOL: number[] = new Array(11).fill(5);
+  private CH_VOL: number[] = new Array(11).fill(0);  // IMS와 볼륨 레벨을 맞추기 위해 0으로 변경
   private TICH: number[] = new Array(11).fill(0);
   private ICH: number[] = new Array(11).fill(0);
   private VCH: number[] = new Array(11).fill(0);
@@ -27,7 +27,7 @@ export class ROLPlayer {
   private CUR_BYTE: number = 0;
   private TOTAL_SIZE: number = 0;
 
-  private VOL_C: number = 127;         // 전체 볼륨 (0-127)
+  private VOL_C: number = 100;         // 전체 볼륨 (0-127, IMS와 볼륨 레벨을 맞추기 위해 100으로 조정)
   private C_TEMPO: number = 0;         // 현재 템포
   private SPEED: number = 100;         // 템포 배속 (100 = 1x)
   private KEY: number = 0;             // 키 조옮김 (-13 ~ +13)
@@ -178,17 +178,16 @@ export class ROLPlayer {
       const note = channel.ticksData[this.TICH[ch]];
       const vol = this.CUR_VOL[ch];
 
-      this.CUR_VOL[ch] = Math.floor(
+      const scaledVol = Math.floor(
         (this.CUR_VOL[ch] * (this.VOL_C + this.CH_VOL[ch])) / 100
       );
-      this.oplEngine.setVoiceVolume(ch, this.CUR_VOL[ch]);
-      this.CUR_VOL[ch] = vol;
+      this.oplEngine.setVoiceVolume(ch, scaledVol);
 
       if (note) {
         // ROL 파일의 노트는 MIDI 표준보다 1옥타브(12) 낮게 저장되어 있음
         this.oplEngine.noteOn(ch, note + this.KEY + 12);
-        // 디스플레이 볼륨 설정 (스케일링 전 원본 볼륨 사용, IMS와 동일)
-        this.displayVolumes[ch] = vol;
+        // 디스플레이 볼륨 설정 (증폭 후 실제 재생 볼륨 사용, IMS와 동일한 로직)
+        this.displayVolumes[ch] = scaledVol;
       }
 
       this.TICH[ch] += 2;
@@ -230,14 +229,8 @@ export class ROLPlayer {
       const vol = channel.volData[this.VCH[ch]];
       this.CUR_VOL[ch] = vol;
 
-      if (Math.floor((this.CUR_VOL[ch] * this.VOL_C) / 100)) {
-        this.oplEngine.setVoiceVolume(
-          ch,
-          Math.floor((this.CUR_VOL[ch] * (this.VOL_C + this.CH_VOL[ch])) / 100)
-        );
-      } else {
-        this.oplEngine.setVoiceVolume(ch, 0);
-      }
+      const scaledVol = Math.floor((this.CUR_VOL[ch] * (this.VOL_C + this.CH_VOL[ch])) / 100);
+      this.oplEngine.setVoiceVolume(ch, scaledVol);
 
       this.VCH[ch]++;
     }
@@ -288,16 +281,10 @@ export class ROLPlayer {
     this.VOL_C = v;
 
     for (let i = 0; i < this.rolData.channelNum; i++) {
-      const vol = this.CUR_VOL[i];
-      if (Math.floor((this.CUR_VOL[i] * this.VOL_C) / 100)) {
-        this.CUR_VOL[i] = Math.floor(
-          (this.CUR_VOL[i] * (this.VOL_C + this.CH_VOL[i])) / 100
-        );
-      } else {
-        this.CUR_VOL[i] = 0;
-      }
-      this.oplEngine.setVoiceVolume(i, this.CUR_VOL[i]);
-      this.CUR_VOL[i] = vol;
+      const scaledVol = Math.floor(
+        (this.CUR_VOL[i] * (this.VOL_C + this.CH_VOL[i])) / 100
+      );
+      this.oplEngine.setVoiceVolume(i, scaledVol);
     }
   }
 

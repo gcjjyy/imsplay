@@ -373,6 +373,9 @@ export class OPLEngine {
       // Integer division for rounding: (MAX_VOLUME+1)/2 = 64
       t1 = ((t1 * this.lVoiceVolume[vc] + Math.floor((constants.MAX_VOLUME + 1) / 2)) >>
           constants.LOG2_VOLUME);
+
+      // Clamp to 63 to prevent overflow when VOL_C + CH_VOL exceeds 127
+      if (t1 > 63) t1 = 63;
     }
 
     t1 = 63 - t1;
