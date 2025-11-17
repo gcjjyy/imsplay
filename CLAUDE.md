@@ -133,12 +133,6 @@ The audio pipeline follows this flow:
 
 ## Debugging Music Issues
 
-### No Sound
-1. Check AudioContext state in browser console
-2. Verify DBOPL (alib.js) is loaded: `window.DBOPL` should exist
-3. Check for instrument loading errors in console
-4. Ensure opl.wasm is copied to public/ (see postinstall script)
-
 ### Wrong Instruments
 1. Check BNK file loading: instrument names are case-insensitive
 2. Verify instrument exists in STANDARD.BNK or custom BNK file

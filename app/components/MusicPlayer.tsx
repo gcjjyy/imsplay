@@ -37,7 +37,6 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   // IMS 샘플
   { musicFile: "/4JSTAMNT.IMS", format: "IMS" },
   { musicFile: "/CUTE-LV2.IMS", format: "IMS" },
-  { musicFile: "/COCKTAIL.IMS", format: "IMS" },
   { musicFile: "/DQUEST4A.IMS", format: "IMS" },
   { musicFile: "/EAGLE-5.IMS", format: "IMS" },
   { musicFile: "/FF5-LOGO.IMS", format: "IMS" },
