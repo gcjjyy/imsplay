@@ -181,6 +181,9 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   // 드래그 앤 드롭 상태
   const [isDragging, setIsDragging] = useState(false);
 
+  // 트랙 종료 콜백 ref (정의 순서 문제 해결)
+  const playNextTrackRef = useRef<(() => void) | null>(null);
+
   // ═══════════════════════════════════════════════════════════════
   // [MEDIA SESSION API - 비활성화됨]
   // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -202,11 +205,17 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     return null;
   }, [currentMusicFile]);
 
+  // 트랙 종료 콜백 (백그라운드에서도 작동)
+  const handleTrackEnd = useCallback(() => {
+    playNextTrackRef.current?.();
+  }, []);
+
   // ROL 플레이어
   const rolPlayer = useROLPlayer({
     rolFile: format === "ROL" ? currentMusicFile : null,
     bnkFile: currentBnkFile,
     fileLoadKey,
+    onTrackEnd: handleTrackEnd,
     // ═══════════════════════════════════════════════════════════════
     // [MEDIA SESSION API - 비활성화됨]
     // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -220,6 +229,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     imsFile: format === "IMS" ? currentMusicFile : null,
     bnkFile: currentBnkFile,
     fileLoadKey,
+    onTrackEnd: handleTrackEnd,
     // ═══════════════════════════════════════════════════════════════
     // [MEDIA SESSION API - 비활성화됨]
     // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -650,6 +660,11 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     }
   }, [repeatMode, playingTrackIndex, musicList.length, loadTrack]);
 
+  // playNextTrack ref 업데이트 (백그라운드 트랙 종료 콜백용)
+  useEffect(() => {
+    playNextTrackRef.current = playNextTrack;
+  }, [playNextTrack]);
+
   /**
    * 트랙 종료 감지 및 처리
    */
@@ -967,7 +982,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.42
+        {" "}IMS/ROL 웹플레이어 v1.43
       </div>
 
       {/* 메인 그리드 */}

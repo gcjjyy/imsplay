@@ -15,6 +15,7 @@ interface UseROLPlayerOptions {
   rolFile: File | null;
   bnkFile: File | null;
   fileLoadKey?: number;
+  onTrackEnd?: () => void;
   // ═══════════════════════════════════════════════════════════════
   // [MEDIA SESSION API - 비활성화됨]
   // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -55,6 +56,7 @@ export function useROLPlayer({
   rolFile,
   bnkFile,
   fileLoadKey,
+  onTrackEnd,
   // ═══════════════════════════════════════════════════════════════
   // [MEDIA SESSION API - 비활성화됨]
   // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -83,6 +85,9 @@ export function useROLPlayer({
 
   // 백그라운드 진입 전 재생 상태 저장
   const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
+
+  // 트랙 종료 콜백 중복 호출 방지
+  const trackEndCallbackFiredRef = useRef<boolean>(false);
 
   /**
    * ROL/BNK 파일 로드 및 플레이어 초기화
@@ -154,6 +159,9 @@ export function useROLPlayer({
         // 샘플 생성 카운터 초기화 (이전 재생의 잔여 값 제거)
         lenGenRef.current = 0;
 
+        // 트랙 종료 콜백 플래그 리셋
+        trackEndCallbackFiredRef.current = false;
+
         // 초기 상태 설정
         fileNameRef.current = rolFile.name; // fileNameRef 업데이트
 
@@ -197,6 +205,17 @@ export function useROLPlayer({
 
       const player = playerRef.current;
       const state = player.getState();
+
+      // 트랙 종료 감지 (백그라운드에서도 작동)
+      if (!state.isPlaying && state.currentByte >= state.totalSize - 100) {
+        if (!trackEndCallbackFiredRef.current && onTrackEnd) {
+          trackEndCallbackFiredRef.current = true;
+          // 다음 이벤트 루프에서 콜백 호출 (React 상태 업데이트 허용)
+          setTimeout(() => {
+            onTrackEnd();
+          }, 0);
+        }
+      }
 
       // 재생 중이 아니면 무음 출력
       if (!state.isPlaying) {
@@ -253,7 +272,7 @@ export function useROLPlayer({
     processor.connect(gainNode);
     gainNode.connect(audioContext.destination);
     processorRef.current = processor;
-  }, []);
+  }, [onTrackEnd]);
 
   /**
    * 정리 함수 (AudioContext는 재사용을 위해 유지)
@@ -392,7 +411,7 @@ export function useROLPlayer({
                 fileName: fileNameRef.current,
               });
             }
-          }, 33);
+          }, 100);
 
           // 즉시 상태 업데이트
           setState({
@@ -409,7 +428,7 @@ export function useROLPlayer({
                   fileName: fileNameRef.current,
                 });
               }
-            }, 33);
+            }, 100);
           }
         }
       }
@@ -472,7 +491,7 @@ export function useROLPlayer({
 
     lenGenRef.current = 0;
 
-    // UI는 30fps로 업데이트
+    // UI는 10fps로 업데이트 (배터리 절약)
     uiUpdateIntervalRef.current = setInterval(() => {
       if (playerRef.current) {
         setState({
@@ -480,7 +499,7 @@ export function useROLPlayer({
       fileName: fileNameRef.current,
     });
       }
-    }, 33);
+    }, 100);
 
     setState({
       ...playerRef.current.getState(),
