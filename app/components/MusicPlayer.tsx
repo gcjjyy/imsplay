@@ -35,9 +35,11 @@ export interface MusicSample {
 
 export const MUSIC_SAMPLES: MusicSample[] = [
   // IMS 샘플
+  { musicFile: "/SIM-FEEL.IMS", format: "IMS" },
   { musicFile: "/4JSTAMNT.IMS", format: "IMS" },
   { musicFile: "/CUTE-LV2.IMS", format: "IMS" },
   { musicFile: "/DQUEST4A.IMS", format: "IMS" },
+  { musicFile: "/O-HA.IMS", format: "IMS" },
   { musicFile: "/EAGLE-5.IMS", format: "IMS" },
   { musicFile: "/FF5-LOGO.IMS", format: "IMS" },
   { musicFile: "/KNIGHT-!.IMS", format: "IMS" },
@@ -45,6 +47,7 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/NAUCIKA2.IMS", format: "IMS" },
   { musicFile: "/SIDE-END.IMS", format: "IMS" },
   { musicFile: "/MYSTERY-.IMS", format: "IMS"},
+  { musicFile: "/S-SOME.IMS", format: "IMS"},
   { musicFile: "/NI-ORANX.IMS", format: "IMS"},
   { musicFile: "/JAM-MEZO.IMS", format: "IMS"},
   { musicFile: "/AS2OPEN-.IMS", format: "IMS" },
