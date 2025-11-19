@@ -24,6 +24,7 @@ export class IMSPlayer {
   private curVol: number[] = new Array(11).fill(0);
   private displayVolumes: number[] = new Array(11).fill(0);  // 디스플레이용 볼륨 (decay 효과)
   private currentTempo: number;
+  private currentTick: number = 0;  // ISS 가사 동기화용 틱 카운터
   private channelInstruments: string[] = new Array(11).fill("");
   private channelMuted: boolean[] = new Array(11).fill(false);  // 채널 뮤트 상태 (디버깅용)
 
@@ -109,6 +110,9 @@ export class IMSPlayer {
 
     // 델타 타임 읽기
     const delay = this.readDeltaTime();
+
+    // 현재 틱 누적 (ISS 가사 동기화용)
+    this.currentTick += delay;
 
     return delay;
   }
@@ -466,6 +470,7 @@ export class IMSPlayer {
     this.curByte = 0;
     this.runningStatus = 0;
     this.currentTempo = this.imsData.basicTempo;
+    this.currentTick = 0;  // 틱 카운터 리셋
 
     // 모든 채널 끄기 (루프 시작 전 깨끗한 상태)
     for (let i = 0; i < 11; i++) {
@@ -549,6 +554,7 @@ export class IMSPlayer {
       volume: this.VOL_C,
       tempo: this.SPEED,
       currentTempo: this.currentTempo,
+      currentTick: this.currentTick,
       currentVolumes: this.displayVolumes.slice(0, this.imsData.chNum),
       instrumentNames: this.channelInstruments.slice(0, this.imsData.chNum),
       channelMuted: this.channelMuted.slice(0, this.imsData.chNum),

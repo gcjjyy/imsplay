@@ -359,6 +359,7 @@ export class ROLPlayer {
       keyTranspose: this.KEY,
       channelVolumes: this.CH_VOL.slice(0, this.rolData.channelNum),
       currentTempo: this.C_TEMPO,
+      currentTick: 0, // ROL은 ISS 가사를 사용하지 않으므로 항상 0
       currentVolumes: this.displayVolumes.slice(0, this.rolData.channelNum),
       instrumentNames: this.channelInstruments.slice(0, this.rolData.channelNum),
       channelMuted: this.channelMuted.slice(0, this.rolData.channelNum),

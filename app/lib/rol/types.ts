@@ -152,6 +152,7 @@ export interface PlaybackState {
 
   // 현재 상태
   currentTempo: number;     // 현재 템포 값 (BPM)
+  currentTick: number;      // 현재 틱 위치 (ISS 가사 동기화용, ROL은 사용 안 함)
   currentVolumes: number[]; // 각 채널의 현재 볼륨
   instrumentNames?: string[]; // 각 채널의 악기명
   channelMuted?: boolean[]; // 각 채널의 뮤트 상태 (디버깅용)

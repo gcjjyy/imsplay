@@ -785,6 +785,7 @@ export function useROLPlayer({
             keyTranspose: 0,
             channelVolumes: Array(11).fill(127),
             currentTempo: 0,
+            currentTick: 0,
             currentVolumes: Array(11).fill(0),
             instrumentNames: [],
             channelMuted: newChannelMuted,
@@ -798,6 +799,26 @@ export function useROLPlayer({
         };
       });
     }
+  }, []);
+
+  /**
+   * Page Visibility API - 탭이 다시 활성화될 때 즉시 상태 업데이트
+   */
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && playerRef.current) {
+        // 탭이 다시 활성화되면 즉시 상태 업데이트
+        setState({
+          ...playerRef.current.getState(),
+          fileName: fileNameRef.current,
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   /**

@@ -21,6 +21,8 @@ import DosButton from "~/components/dos-ui/DosButton";
 import DosList from "~/components/dos-ui/DosList";
 import DosSlider from "~/components/dos-ui/DosSlider";
 import PianoRoll from "./PianoRoll";
+import LyricsDisplay from "./LyricsDisplay";
+import type { ISSData } from "~/routes/api.parse-iss";
 import { X, Repeat1, Repeat, Play, Pause, Square, SkipBack, SkipForward } from "lucide-react";
 
 type MusicFormat = "ROL" | "IMS" | null;
@@ -108,6 +110,45 @@ async function loadFileFromURL(url: string, filename: string): Promise<File> {
 }
 
 /**
+ * ISS 파일을 서버로 전송하여 파싱 (Johab → UTF-8 변환 포함)
+ */
+async function parseISSFile(issFile: File | string): Promise<ISSData | null> {
+  try {
+    let file: File;
+
+    // URL 문자열인 경우 File로 변환
+    if (typeof issFile === 'string') {
+      const response = await fetch(issFile);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      file = new File([blob], issFile.split('/').pop() || 'file.ISS');
+    } else {
+      file = issFile;
+    }
+
+    // FormData로 서버에 전송
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/parse-iss', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      console.warn('ISS parsing failed:', response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data as ISSData;
+  } catch (error) {
+    console.warn('ISS file not found or parsing error:', error);
+    return null;
+  }
+}
+
+/**
  * 샘플 음악의 BNK 파일 경로를 찾습니다 (public 폴더 내 검색)
  */
 async function findMatchingBnkFile(musicFilePath: string): Promise<string> {
@@ -182,6 +223,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const [playingTrackIndex, setPlayingTrackIndex] = useState<number>(0); // 실제 재생 중인 곡 인덱스
   const [currentMusicFile, setCurrentMusicFile] = useState<File | null>(null);
   const [currentBnkFile, setCurrentBnkFile] = useState<File | null>(null);
+  const [currentIssData, setCurrentIssData] = useState<ISSData | null>(null); // ISS 가사 데이터
   const [fileLoadKey, setFileLoadKey] = useState<number>(0);
 
   // 재생 상태
@@ -524,6 +566,10 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
 
         setCurrentMusicFile(musicFile);
         setCurrentBnkFile(bnkFile);
+
+        // ISS 파일 찾기 (사용자 폴더의 경우 파일명 매칭)
+        // TODO: 사용자가 ISS 파일도 업로드할 수 있도록 파일 업로드 로직 수정 필요
+        setCurrentIssData(null);
       } else {
         // 샘플 모드
         const sample = musicSamples[index];
@@ -542,6 +588,15 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
 
         setCurrentMusicFile(musicFileObj);
         setCurrentBnkFile(bnkFileObj);
+
+        // ISS 파일 찾기 (샘플 모드의 경우 public 폴더에서 확인)
+        if (sample.format === 'IMS') {
+          const issPath = sample.musicFile.replace('.IMS', '.ISS');
+          const issData = await parseISSFile(issPath);
+          setCurrentIssData(issData);
+        } else {
+          setCurrentIssData(null);
+        }
       }
 
       // fileLoadKey 증가 (플레이어 강제 재초기화)
@@ -994,7 +1049,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.44
+        {" "}IMS/ROL 웹플레이어 v1.47
       </div>
 
       {/* 메인 그리드 */}
@@ -1284,30 +1339,13 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
             onToggleChannel={format === "IMS" ? imsPlayer.toggleChannel : format === "ROL" ? rolPlayer.toggleChannel : imsPlayer.toggleChannel}
           />
 
-          {/* 크레딧 */}
+          {/* 가사 / 크레딧 */}
           <DosPanel className="dos-panel-credits" style={{ height: '140px', flexShrink: 0 }}>
-            <div style={{
-              textAlign: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              height: '100%'
-            }}>
-              <div style={{ marginBottom: '12px', color: 'var(--color-white)' }}>
-                (C) 2025 QuickBASIC (gcjjyy@gmail.com)
-              </div>
-              <div style={{ marginBottom: '4px', color: 'var(--color-silver)' }}>
-                도움 주신 분들
-              </div>
-              <div style={{ marginBottom: '8px', color: 'var(--color-yellow)' }}>
-                하늘소, 피시키드, 키노피오
-              </div>
-              <div style={{ marginTop: '8px' }}>
-                <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link-credits">
-                  도스박물관 - 도스 시대의 추억을 간직하는 곳
-                </a>
-              </div>
-            </div>
+            <LyricsDisplay
+              issData={currentIssData}
+              currentTick={state?.currentTick ?? 0}
+              isPlaying={state?.isPlaying ?? false}
+            />
           </DosPanel>
         </div>
       </div>

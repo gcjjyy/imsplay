@@ -97,6 +97,9 @@ export interface IMSPlaybackState {
   /** 현재 템포 값 (BPM) */
   currentTempo: number;
 
+  /** 현재 틱 위치 (ISS 가사 동기화용) */
+  currentTick: number;
+
   /** 각 채널의 현재 볼륨 */
   currentVolumes: number[];
 

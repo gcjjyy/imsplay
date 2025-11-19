@@ -769,6 +769,7 @@ export function useIMSPlayer({
             tempo: 100,
             volume: 100,
             currentTempo: 0,
+            currentTick: 0,
             currentVolumes: Array(11).fill(0),
             instrumentNames: [],
             channelMuted: newChannelMuted,
@@ -790,6 +791,26 @@ export function useIMSPlayer({
       // 0-100 범위를 0.0-1.0으로 변환
       gainNodeRef.current.gain.value = volume / 100;
     }
+  }, []);
+
+  /**
+   * Page Visibility API - 탭이 다시 활성화될 때 즉시 상태 업데이트
+   */
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && playerRef.current) {
+        // 탭이 다시 활성화되면 즉시 상태 업데이트
+        setState({
+          ...playerRef.current.getState(),
+          fileName: fileNameRef.current,
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   /**
