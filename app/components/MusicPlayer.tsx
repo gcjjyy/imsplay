@@ -22,7 +22,7 @@ import DosList from "~/components/dos-ui/DosList";
 import DosSlider from "~/components/dos-ui/DosSlider";
 import PianoRoll from "./PianoRoll";
 import LyricsDisplay from "./LyricsDisplay";
-import type { ISSData } from "~/routes/api.parse-iss";
+import type { ISSData } from "~/routes/api/parse-iss";
 import { X, Repeat1, Repeat, Play, Pause, Square, SkipBack, SkipForward } from "lucide-react";
 
 type MusicFormat = "ROL" | "IMS" | null;
@@ -37,6 +37,9 @@ export interface MusicSample {
 
 export const MUSIC_SAMPLES: MusicSample[] = [
   // IMS 샘플
+  { musicFile: "/JAM-FIVE.IMS", format: "IMS" },
+  { musicFile: "/JAM-NADI.IMS", format: "IMS" },
+  { musicFile: "/MYSTERY-.IMS", format: "IMS"},
   { musicFile: "/SHC.IMS", format: "IMS" },
   { musicFile: "/4JSTAMNT.IMS", format: "IMS" },
   { musicFile: "/CUTE-LV2.IMS", format: "IMS" },
@@ -50,7 +53,6 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/GENESIS.IMS", format: "IMS" },
   { musicFile: "/NAUCIKA2.IMS", format: "IMS" },
   { musicFile: "/SIDE-END.IMS", format: "IMS" },
-  { musicFile: "/MYSTERY-.IMS", format: "IMS"},
   { musicFile: "/S-SOME.IMS", format: "IMS"},
   { musicFile: "/NI-ORANX.IMS", format: "IMS"},
   { musicFile: "/JAM-MEZO.IMS", format: "IMS"},
@@ -67,8 +69,6 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/AMG0018.IMS", format: "IMS" },
   { musicFile: "/AMG0024.IMS", format: "IMS" },
   { musicFile: "/FF6-GW02.IMS", format: "IMS" },
-  { musicFile: "/JAM-FIVE.IMS", format: "IMS" },
-  { musicFile: "/JAM-NADI.IMS", format: "IMS" },
   { musicFile: "/MACROS!!.IMS", format: "IMS" },
   { musicFile: "/MACROS2.IMS", format: "IMS" },
   { musicFile: "/AMG0002.IMS", format: "IMS" },
@@ -211,6 +211,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const [userMusicFiles, setUserMusicFiles] = useState<File[]>([]);
   const [userMusicFileTitles, setUserMusicFileTitles] = useState<Map<string, string>>(new Map());
   const [userBnkFiles, setUserBnkFiles] = useState<Map<string, File>>(new Map());
+  const [userIssFiles, setUserIssFiles] = useState<Map<string, File>>(new Map());
 
   // 로딩 상태
   const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
@@ -385,9 +386,13 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       // 파일 분류 (대소문자 구별 없이)
       const musicFiles = files.filter(f => /\.(ims|rol)$/i.test(f.name));
       const bnkFiles = files.filter(f => /\.bnk$/i.test(f.name));
+      const issFiles = files.filter(f => /\.iss$/i.test(f.name));
 
       // BNK 파일을 Map으로 변환 (파일명 소문자 → File 객체)
       const bnkMap = new Map(bnkFiles.map(f => [f.name.toLowerCase(), f]));
+
+      // ISS 파일을 Map으로 변환 (파일명 소문자 → File 객체)
+      const issMap = new Map(issFiles.map(f => [f.name.toLowerCase(), f]));
 
       // 제목 Map 초기화
       const titlesMap = new Map<string, string>();
@@ -461,11 +466,12 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       setUserMusicFiles(musicFiles);
       setUserMusicFileTitles(titlesMap);
       setUserBnkFiles(bnkMap);
+      setUserIssFiles(issMap);
       setCurrentTrackIndex(0);
 
       // 첫 번째 곡 로드 (자동 재생 안 함)
       if (musicFiles.length > 0) {
-        loadTrack(0, musicFiles, bnkMap, false);
+        loadTrack(0, musicFiles, bnkMap, issMap, false);
       }
     } catch (error) {
       console.error('파일 처리 오류:', error);
@@ -540,6 +546,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     index: number,
     files?: File[],
     bnkMap?: Map<string, File>,
+    issMap?: Map<string, File>,
     autoPlayAfterLoad: boolean = false
   ) => {
     // 현재 재생 중이면 정지
@@ -556,6 +563,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         // 사용자 폴더 모드
         const musicFiles = files || userMusicFiles;
         const userBnkMap = bnkMap || userBnkFiles;
+        const userIssMap = issMap || userIssFiles;
         const musicFile = musicFiles[index];
 
         if (!musicFile) {
@@ -568,8 +576,19 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         setCurrentBnkFile(bnkFile);
 
         // ISS 파일 찾기 (사용자 폴더의 경우 파일명 매칭)
-        // TODO: 사용자가 ISS 파일도 업로드할 수 있도록 파일 업로드 로직 수정 필요
-        setCurrentIssData(null);
+        if (musicFile.name.toLowerCase().endsWith('.ims')) {
+          const baseName = musicFile.name.replace(/\.ims$/i, '').toLowerCase();
+          const matchingIss = userIssMap.get(`${baseName}.iss`);
+
+          if (matchingIss) {
+            const issData = await parseISSFile(matchingIss);
+            setCurrentIssData(issData);
+          } else {
+            setCurrentIssData(null);
+          }
+        } else {
+          setCurrentIssData(null);
+        }
       } else {
         // 샘플 모드
         const sample = musicSamples[index];
@@ -703,11 +722,11 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const playPreviousTrack = useCallback(() => {
     if (repeatMode === 'all') {
       const prevIndex = playingTrackIndex === 0 ? musicList.length - 1 : playingTrackIndex - 1;
-      loadTrack(prevIndex, undefined, undefined, true);
+      loadTrack(prevIndex, undefined, undefined, undefined, true);
     } else if (repeatMode === 'none') {
       if (playingTrackIndex > 0) {
         const prevIndex = playingTrackIndex - 1;
-        loadTrack(prevIndex, undefined, undefined, true);
+        loadTrack(prevIndex, undefined, undefined, undefined, true);
       }
     }
   }, [repeatMode, playingTrackIndex, musicList.length, loadTrack]);
@@ -718,11 +737,11 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const playNextTrack = useCallback(() => {
     if (repeatMode === 'all') {
       const nextIndex = (playingTrackIndex + 1) % musicList.length;
-      loadTrack(nextIndex, undefined, undefined, true);
+      loadTrack(nextIndex, undefined, undefined, undefined, true);
     } else if (repeatMode === 'none') {
       if (playingTrackIndex < musicList.length - 1) {
         const nextIndex = playingTrackIndex + 1;
-        loadTrack(nextIndex, undefined, undefined, true);
+        loadTrack(nextIndex, undefined, undefined, undefined, true);
       }
     }
   }, [repeatMode, playingTrackIndex, musicList.length, loadTrack]);
@@ -850,7 +869,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
               </div>
               <DosButton
                 onClick={() => {
-                  loadTrack(index, undefined, undefined, true);
+                  loadTrack(index, undefined, undefined, undefined, true);
                 }}
                 disabled={isLoadingTrack}
                 style={{
@@ -882,7 +901,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
             </div>
             <DosButton
               onClick={() => {
-                loadTrack(index, undefined, undefined, true);
+                loadTrack(index, undefined, undefined, undefined, true);
               }}
               disabled={isLoadingTrack}
               style={{

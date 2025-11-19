@@ -6,7 +6,7 @@
  */
 
 import { useMemo } from 'react';
-import type { ISSData } from '~/routes/api.parse-iss';
+import type { ISSData } from '~/routes/api/parse-iss';
 
 interface LyricsDisplayProps {
   issData: ISSData | null;
