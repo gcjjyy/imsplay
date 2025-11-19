@@ -83,6 +83,9 @@ export function useIMSPlayer({
   // 백그라운드 진입 전 재생 상태 저장
   const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
 
+  // 백그라운드 복귀 플래그
+  const needsAudioRecoveryRef = useRef<boolean>(false);
+
   // 트랙 종료 콜백 중복 호출 방지
   const trackEndCallbackFiredRef = useRef<boolean>(false);
 
@@ -314,15 +317,136 @@ export function useIMSPlayer({
   }, []);
 
   /**
+   * AudioContext가 'running' 상태인지 확인하고 복구
+   * @returns AudioContext가 준비되었는지 여부
+   */
+  const ensureAudioContextReady = useCallback(async (): Promise<boolean> => {
+    if (!audioContextRef.current) {
+      console.error('[useIMSPlayer.ensureAudioContextReady] AudioContext가 없습니다.');
+      return false;
+    }
+
+    const audioContext = audioContextRef.current;
+    console.log('[useIMSPlayer.ensureAudioContextReady] 현재 AudioContext 상태:', audioContext.state);
+
+    // Closed 상태: 재생성 필요
+    if (audioContext.state === 'closed') {
+      console.log('[useIMSPlayer.ensureAudioContextReady] AudioContext가 closed 상태입니다. 재생성 중...');
+      try {
+        const newAudioContext = new AudioContext();
+        audioContextRef.current = newAudioContext;
+
+        // ScriptProcessorNode 재생성
+        if (processorRef.current) {
+          processorRef.current.disconnect();
+          processorRef.current = null;
+        }
+        initializeAudioProcessor(newAudioContext);
+
+        // Resume 필요 시 처리
+        if (newAudioContext.state === 'suspended') {
+          const resumed = await attemptResume(newAudioContext);
+          if (!resumed) {
+            console.error('[useIMSPlayer.ensureAudioContextReady] 재생성 후 resume 실패');
+            return false;
+          }
+        }
+
+        console.log('[useIMSPlayer.ensureAudioContextReady] AudioContext 재생성 완료');
+        return true;
+      } catch (error) {
+        console.error('[useIMSPlayer.ensureAudioContextReady] AudioContext 재생성 실패:', error);
+        return false;
+      }
+    }
+
+    // Suspended 상태: Resume 시도 (최대 3회)
+    if (audioContext.state === 'suspended') {
+      const resumed = await attemptResume(audioContext);
+      if (!resumed) {
+        // Resume 실패 시 재생성 시도
+        console.log('[useIMSPlayer.ensureAudioContextReady] Resume 실패, AudioContext 재생성 시도...');
+        try {
+          const newAudioContext = new AudioContext();
+          audioContextRef.current = newAudioContext;
+
+          // ScriptProcessorNode 재생성
+          if (processorRef.current) {
+            processorRef.current.disconnect();
+            processorRef.current = null;
+          }
+          initializeAudioProcessor(newAudioContext);
+
+          // 새 Context도 suspended일 수 있으므로 다시 시도
+          if (newAudioContext.state === 'suspended') {
+            const resumed = await attemptResume(newAudioContext);
+            if (!resumed) {
+              console.error('[useIMSPlayer.ensureAudioContextReady] 재생성 후에도 resume 실패');
+              return false;
+            }
+          }
+
+          console.log('[useIMSPlayer.ensureAudioContextReady] AudioContext 재생성 완료');
+          return true;
+        } catch (error) {
+          console.error('[useIMSPlayer.ensureAudioContextReady] AudioContext 재생성 실패:', error);
+          return false;
+        }
+      }
+    }
+
+    // Running 상태: 정상
+    console.log('[useIMSPlayer.ensureAudioContextReady] AudioContext 준비 완료 (state:', audioContext.state + ')');
+    return true;
+  }, [initializeAudioProcessor]);
+
+  /**
+   * AudioContext resume 시도 (최대 3회, 타임아웃 5초)
+   */
+  const attemptResume = async (audioContext: AudioContext): Promise<boolean> => {
+    const maxRetries = 3;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        console.log(`[useIMSPlayer.attemptResume] Resume 시도 ${i + 1}/${maxRetries}...`);
+
+        const resumePromise = audioContext.resume();
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('AudioContext resume timeout')), 5000)
+        );
+
+        await Promise.race([resumePromise, timeoutPromise]);
+
+        // 상태 재확인
+        if (audioContext.state === 'running') {
+          console.log('[useIMSPlayer.attemptResume] Resume 성공');
+          return true;
+        } else {
+          console.warn(`[useIMSPlayer.attemptResume] Resume 후에도 상태가 ${audioContext.state}입니다.`);
+          // 짧은 대기 후 재시도
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.error(`[useIMSPlayer.attemptResume] Resume 시도 ${i + 1} 실패:`, error);
+        if (i < maxRetries - 1) {
+          // 재시도 전 대기
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+    }
+
+    console.error('[useIMSPlayer.attemptResume] 모든 resume 시도 실패');
+    return false;
+  };
+
+  /**
    * Page Visibility API: 백그라운드/포그라운드 전환 처리
    */
   useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (!playerRef.current || !audioContextRef.current) {
+    const handleVisibilityChange = () => {
+      if (!playerRef.current) {
         return;
       }
 
-      const audioContext = audioContextRef.current;
       const player = playerRef.current;
 
       if (document.hidden) {
@@ -335,120 +459,9 @@ export function useIMSPlayer({
           uiUpdateIntervalRef.current = null;
         }
       } else {
-        // 포그라운드 복귀: AudioContext 상태 확인 및 복구
-        console.log('[useIMSPlayer] Returning from background. AudioContext state:', audioContext.state);
-
-        if (audioContext.state === "closed") {
-          // iOS Safari가 AudioContext를 완전히 종료함 → 재생성 필요
-          try {
-            console.log('[useIMSPlayer] AudioContext is closed. Recreating...');
-
-            // 새 AudioContext 생성
-            const newAudioContext = new AudioContext();
-            audioContextRef.current = newAudioContext;
-
-            // AudioContext resume (새로 생성된 컨텍스트도 suspended일 수 있음)
-            if (newAudioContext.state === "suspended") {
-              const resumePromise = newAudioContext.resume();
-              const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('AudioContext resume timeout')), 3000)
-              );
-              await Promise.race([resumePromise, timeoutPromise]);
-            }
-
-            // ScriptProcessorNode 재생성
-            if (processorRef.current) {
-              processorRef.current.disconnect();
-              processorRef.current = null;
-            }
-            initializeAudioProcessor(newAudioContext);
-
-            console.log('[useIMSPlayer] AudioContext recreated successfully');
-          } catch (error) {
-            console.error('[useIMSPlayer] Failed to recreate AudioContext:', error);
-          }
-        } else if (audioContext.state === "suspended") {
-          // 일반적인 suspended 상태 → resume 시도
-          try {
-            const resumePromise = audioContext.resume();
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('AudioContext resume timeout')), 3000)
-            );
-            await Promise.race([resumePromise, timeoutPromise]);
-            console.log('[useIMSPlayer] AudioContext resumed after returning from background');
-          } catch (error) {
-            console.error('[useIMSPlayer] Failed to resume AudioContext:', error);
-            // resume 실패 시 재생성 시도
-            try {
-              console.log('[useIMSPlayer] Attempting to recreate AudioContext after resume failure...');
-              const newAudioContext = new AudioContext();
-              audioContextRef.current = newAudioContext;
-
-              if (newAudioContext.state === "suspended") {
-                await newAudioContext.resume();
-              }
-
-              if (processorRef.current) {
-                processorRef.current.disconnect();
-                processorRef.current = null;
-              }
-              initializeAudioProcessor(newAudioContext);
-
-              console.log('[useIMSPlayer] AudioContext recreated after resume failure');
-            } catch (recreateError) {
-              console.error('[useIMSPlayer] Failed to recreate AudioContext:', recreateError);
-            }
-          }
-        }
-
-        // 이전에 재생 중이었다면 자동 재개
-        if (wasPlayingBeforeBackgroundRef.current && !player.getState().isPlaying) {
-          // ═══════════════════════════════════════════════════════════════
-          // [MEDIA SESSION API - 비활성화됨]
-          // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
-          // ═══════════════════════════════════════════════════════════════
-          // // 무음 오디오 재시작 (Media Session 활성화)
-          // if (silentAudioRef?.current && silentAudioRef.current.paused) {
-          //   try {
-          //     await silentAudioRef.current.play();
-          //   } catch (error) {
-          //     console.warn('[useIMSPlayer] 포그라운드 복귀 시 무음 오디오 재생 실패:', error);
-          //   }
-          // }
-          // ═══════════════════════════════════════════════════════════════
-
-          // 플레이어 재생 재개
-          player.play();
-          lenGenRef.current = 0;
-
-          // UI 타이머 재시작
-          uiUpdateIntervalRef.current = setInterval(() => {
-            if (playerRef.current) {
-              setState({
-                ...playerRef.current.getState(),
-                fileName: fileNameRef.current,
-              });
-            }
-          }, 100);
-
-          // 즉시 상태 업데이트
-          setState({
-            ...player.getState(),
-            fileName: fileNameRef.current,
-          });
-        } else if (player.getState().isPlaying) {
-          // 이미 재생 중이지만 UI 타이머가 꺼져있다면 재시작
-          if (!uiUpdateIntervalRef.current) {
-            uiUpdateIntervalRef.current = setInterval(() => {
-              if (playerRef.current) {
-                setState({
-                  ...playerRef.current.getState(),
-                  fileName: fileNameRef.current,
-                });
-              }
-            }, 100);
-          }
-        }
+        // 포그라운드 복귀: AudioContext 복구 플래그 설정
+        console.log('[useIMSPlayer] Returning from background');
+        needsAudioRecoveryRef.current = true;
       }
     };
 
@@ -459,6 +472,94 @@ export function useIMSPlayer({
     };
   }, []); // dependency 없음 - ref를 통해 최신 값 접근
 
+  /**
+   * 백그라운드 복귀 시 AudioContext 복구 처리
+   */
+  useEffect(() => {
+    if (!needsAudioRecoveryRef.current) {
+      return;
+    }
+
+    const recoverAudio = async () => {
+      needsAudioRecoveryRef.current = false;
+
+      if (!playerRef.current || !audioContextRef.current) {
+        return;
+      }
+
+      console.log('[useIMSPlayer] Starting audio recovery...');
+
+      // AudioContext 복구
+      const recovered = await ensureAudioContextReady();
+      if (!recovered) {
+        console.error('[useIMSPlayer] AudioContext 복구 실패');
+        setError('AudioContext 복구에 실패했습니다. 다시 재생 버튼을 눌러주세요.');
+        return;
+      }
+
+      const player = playerRef.current;
+
+      // 이전에 재생 중이었다면 자동 재개
+      if (wasPlayingBeforeBackgroundRef.current && !player.getState().isPlaying) {
+        // ═══════════════════════════════════════════════════════════════
+        // [MEDIA SESSION API - 비활성화됨]
+        // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
+        // ═══════════════════════════════════════════════════════════════
+        // // 무음 오디오 재시작 (Media Session 활성화)
+        // if (silentAudioRef?.current && silentAudioRef.current.paused) {
+        //   try {
+        //     await silentAudioRef.current.play();
+        //   } catch (error) {
+        //     console.warn('[useIMSPlayer] 포그라운드 복귀 시 무음 오디오 재생 실패:', error);
+        //   }
+        // }
+        // ═══════════════════════════════════════════════════════════════
+
+        // 플레이어 재생 재개
+        player.play();
+        lenGenRef.current = 0;
+
+        // UI 타이머 재시작
+        if (uiUpdateIntervalRef.current) {
+          clearInterval(uiUpdateIntervalRef.current);
+        }
+        uiUpdateIntervalRef.current = setInterval(() => {
+          if (playerRef.current) {
+            setState({
+              ...playerRef.current.getState(),
+              fileName: fileNameRef.current,
+            });
+          }
+        }, 100);
+
+        // 즉시 상태 업데이트
+        setState({
+          ...player.getState(),
+          fileName: fileNameRef.current,
+        });
+
+        console.log('[useIMSPlayer] Audio recovery and playback resumed successfully');
+      } else if (player.getState().isPlaying) {
+        // 이미 재생 중이지만 UI 타이머가 꺼져있다면 재시작
+        if (!uiUpdateIntervalRef.current) {
+          uiUpdateIntervalRef.current = setInterval(() => {
+            if (playerRef.current) {
+              setState({
+                ...playerRef.current.getState(),
+                fileName: fileNameRef.current,
+              });
+            }
+          }, 100);
+        }
+        console.log('[useIMSPlayer] Audio recovery completed (already playing)');
+      } else {
+        console.log('[useIMSPlayer] Audio recovery completed (not playing)');
+      }
+    };
+
+    recoverAudio();
+  }, [needsAudioRecoveryRef.current, ensureAudioContextReady]);
+
 
   /**
    * 재생 시작
@@ -468,28 +569,18 @@ export function useIMSPlayer({
       return;
     }
 
-    const audioContext = audioContextRef.current;
+    console.log('[useIMSPlayer.play] Play 시작, AudioContext 상태 확인 중...');
 
-    // AudioContext resume (Safari autoplay 정책: await 필요)
-    if (audioContext.state === "suspended") {
-      try {
-        // Safari에서 resume()이 영원히 pending될 수 있으므로 타임아웃 추가
-        const resumePromise = audioContext.resume();
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('AudioContext resume timeout')), 3000)
-        );
-
-        await Promise.race([resumePromise, timeoutPromise]);
-
-        // 재개 후에도 suspended 상태라면 경고
-        if (audioContext.state === "suspended") {
-          console.warn('[useIMSPlayer.play] AudioContext가 여전히 suspended 상태입니다. Safari autoplay 정책으로 차단되었을 수 있습니다.');
-        }
-      } catch (error) {
-        console.error('[useIMSPlayer.play] AudioContext 재개 실패:', error);
-        console.warn('[useIMSPlayer.play] 재생을 계속 시도하지만 소리가 나지 않을 수 있습니다.');
-      }
+    // AudioContext 상태 확인 및 복구
+    const isReady = await ensureAudioContextReady();
+    if (!isReady) {
+      console.error('[useIMSPlayer.play] AudioContext 준비 실패');
+      setError('오디오 시스템 초기화에 실패했습니다. 다시 시도해주세요.');
+      return;
     }
+
+    console.log('[useIMSPlayer.play] AudioContext 준비 완료, 재생 시작');
+    setError(null); // 에러 상태 클리어
 
     // ═══════════════════════════════════════════════════════════════
     // [MEDIA SESSION API - 비활성화됨]
@@ -524,6 +615,7 @@ export function useIMSPlayer({
       fileName: fileNameRef.current,
     });
   }, [
+    ensureAudioContextReady,
     // ═══════════════════════════════════════════════════════════════
     // [MEDIA SESSION API - 비활성화됨]
     // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
