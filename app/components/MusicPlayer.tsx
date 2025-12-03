@@ -2,7 +2,7 @@
  * MusicPlayer.tsx - 통합 음악 플레이어 UI 컴포넌트
  *
  * Impulse Tracker 스타일 DOS UI
- * v1.34 - Media Session API 활성화 (무음 오디오 워크어라운드)
+ * v1.48 - AudioContext 공유로 IMS→ROL 자동 전환 재생 수정
  */
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
@@ -242,6 +242,9 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   // 강제 재로드 플래그 (트랙 재생 버튼 클릭 시 AudioContext 완전 재생성)
   const forceReloadRef = useRef<boolean>(false);
 
+  // 공유 AudioContext (IMS/ROL 플레이어 간 공유 - Safari autoplay 정책 준수)
+  const sharedAudioContextRef = useRef<AudioContext | null>(null);
+
   // ═══════════════════════════════════════════════════════════════
   // [MEDIA SESSION API - 비활성화됨]
   // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -275,6 +278,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     fileLoadKey,
     forceReloadRef,
     onTrackEnd: handleTrackEnd,
+    sharedAudioContextRef,
     // ═══════════════════════════════════════════════════════════════
     // [MEDIA SESSION API - 비활성화됨]
     // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -290,6 +294,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     fileLoadKey,
     forceReloadRef,
     onTrackEnd: handleTrackEnd,
+    sharedAudioContextRef,
     // ═══════════════════════════════════════════════════════════════
     // [MEDIA SESSION API - 비활성화됨]
     // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -1097,7 +1102,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.47
+        {" "}IMS/ROL 웹플레이어 v1.48
       </div>
 
       {/* 메인 그리드 */}
