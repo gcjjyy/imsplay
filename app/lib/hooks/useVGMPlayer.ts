@@ -241,9 +241,11 @@ export function useVGMPlayer({
       // VGM은 샘플 기반이므로 직접 생성
       const samples = player.generateSamples(lenFill);
 
+      // VGM은 IMS/ROL보다 볼륨이 낮아서 보정 (곱하기 먼저 해서 정밀도 손실 최소화)
+      const volumeBoost = 2.0;
       for (let i = 0; i < lenFill; i++) {
-        outputL[i] = samples[i * 2] / 32768.0;
-        outputR[i] = samples[i * 2 + 1] / 32768.0;
+        outputL[i] = (samples[i * 2] * volumeBoost) / 32768.0;
+        outputR[i] = (samples[i * 2 + 1] * volumeBoost) / 32768.0;
       }
     };
 
