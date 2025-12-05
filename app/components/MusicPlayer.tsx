@@ -10,6 +10,7 @@ import { useFetcher } from "react-router";
 import { useROLPlayer } from "~/lib/hooks/useROLPlayer";
 import { useIMSPlayer } from "~/lib/hooks/useIMSPlayer";
 import { useVGMPlayer } from "~/lib/hooks/useVGMPlayer";
+import { isYM3812VGM } from "~/lib/vgm/vgm-parser";
 // ═══════════════════════════════════════════════════════════════
 // [MEDIA SESSION API - 비활성화됨]
 // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -76,7 +77,6 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/AMG0008.IMS", format: "IMS" },
   { musicFile: "/AMG0011.IMS", format: "IMS" },
   { musicFile: "/P_013.IMS", format: "IMS" },
-  { musicFile: "/PST_FOUN.IMS", format: "IMS" },
   { musicFile: "/SPI0051.IMS", format: "IMS" },
   { musicFile: "/SONG08.IMS", format: "IMS" },
   { musicFile: "/SPI0082.IMS", format: "IMS" },
@@ -119,10 +119,8 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/01 Peter Gunn Theme.vgm", format: "VGM" },
   { musicFile: "/01 Shadows Don't Scare Commander Keen!!.vgm", format: "VGM" },
   { musicFile: "/01 Simpsons Theme Song.vgm", format: "VGM" },
-  { musicFile: "/01 Title Screen.vgm", format: "VGM" },
   { musicFile: "/02 Main Theme.vgm", format: "VGM" },
   { musicFile: "/03 Buy, Sell Music.vgm", format: "VGM" },
-  { musicFile: "/03 In-game music.vgm", format: "VGM" },
   { musicFile: "/04 Town.vgm", format: "VGM" },
   { musicFile: "/04 Tropical Ghost Oasis.vgm", format: "VGM" },
   { musicFile: "/05 Welcome to a Kick In Yore Pants In Good Ole Hillville!.vgm", format: "VGM" },
@@ -442,9 +440,25 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
 
     try {
       // 파일 분류 (대소문자 구별 없이)
-      const musicFiles = files.filter(f => /\.(ims|rol|vgm|vgz)$/i.test(f.name));
+      const imsRolFiles = files.filter(f => /\.(ims|rol)$/i.test(f.name));
+      const vgmFiles = files.filter(f => /\.(vgm|vgz)$/i.test(f.name));
       const bnkFiles = files.filter(f => /\.bnk$/i.test(f.name));
       const issFiles = files.filter(f => /\.iss$/i.test(f.name));
+
+      // VGM 파일 중 YM3812 칩을 사용하는 파일만 필터링
+      const validVgmFiles: File[] = [];
+      for (const vgmFile of vgmFiles) {
+        try {
+          const buffer = await vgmFile.arrayBuffer();
+          if (isYM3812VGM(buffer)) {
+            validVgmFiles.push(vgmFile);
+          }
+        } catch {
+          // 파일 읽기 실패 시 무시
+        }
+      }
+
+      const musicFiles = [...imsRolFiles, ...validVgmFiles];
 
       // BNK 파일을 Map으로 변환 (파일명 소문자 → File 객체)
       const bnkMap = new Map(bnkFiles.map(f => [f.name.toLowerCase(), f]));
@@ -1152,7 +1166,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.49
+        {" "}IMS/ROL 웹플레이어 v1.51
       </div>
 
       {/* 메인 그리드 */}

@@ -28,6 +28,25 @@ const VGM_OFFSET_YM3812_CLOCK = 0x50;
 export const VGM_SAMPLE_RATE = 44100;
 
 /**
+ * Check if a VGM file uses YM3812/OPL2 chip
+ * Returns true if the file is a valid VGM with YM3812 clock set
+ */
+export function isYM3812VGM(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 0x54) return false;
+
+  const view = new DataView(buffer);
+  const magic = String.fromCharCode(
+    view.getUint8(0), view.getUint8(1),
+    view.getUint8(2), view.getUint8(3)
+  );
+  if (magic !== 'Vgm ') return false;
+
+  // YM3812 clock at offset 0x50
+  const ym3812Clock = view.getUint32(0x50, true);
+  return ym3812Clock !== 0;
+}
+
+/**
  * Parse VGM file header
  */
 function parseHeader(view: DataView): VGMHeader {
