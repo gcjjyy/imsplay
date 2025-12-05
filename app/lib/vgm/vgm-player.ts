@@ -326,7 +326,7 @@ export class VGMPlayer {
         // Convert VGM sample position to output sample position
         const nextCmdOutputSample = (nextCmd.absoluteSample - this.currentSample) / this.sampleRateRatio;
 
-        if (nextCmdOutputSample < 1) {
+        if (nextCmdOutputSample <= 0) {
           // Process command immediately
           if (nextCmd.type === 'write') {
             this.trackRegister(nextCmd.register!, nextCmd.value!);
@@ -346,6 +346,12 @@ export class VGMPlayer {
         } else if (nextCmdOutputSample < samplesToGenerate) {
           samplesToGenerate = Math.max(1, Math.floor(nextCmdOutputSample));
         }
+      }
+
+      // Don't exceed remaining
+      samplesToGenerate = Math.min(samplesToGenerate, remainingSamples);
+      if (!Number.isFinite(samplesToGenerate) || samplesToGenerate < 1) {
+        break;
       }
 
       // Generate samples up to next command (or end of buffer)

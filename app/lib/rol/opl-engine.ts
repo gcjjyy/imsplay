@@ -270,18 +270,32 @@ export class OPLEngine {
     if (!this.opl) return new Int16Array(0);
 
     const maxSamplesPerCall = 512;
+    const minSamplesPerCall = 2; // DBOPL 최소 요구사항
     const channels = 2; // 스테레오
     const result = new Int16Array(samples * channels);
     let offset = 0;
 
     while (offset < samples) {
-      const samplesToGenerate = Math.min(maxSamplesPerCall, samples - offset);
+      const remaining = samples - offset;
+      let samplesToGenerate = Math.min(maxSamplesPerCall, remaining);
+
+      // DBOPL은 최소 2샘플 필요
+      // 마지막 청크가 1이 되지 않도록 미리 조정
+      if (samplesToGenerate < minSamplesPerCall) {
+        // 전체 요청이 2 미만이면 2로 올리고 필요한 만큼만 복사
+        samplesToGenerate = minSamplesPerCall;
+      } else if (remaining > maxSamplesPerCall && remaining - maxSamplesPerCall < minSamplesPerCall) {
+        // 다음 청크가 1이 될 것 같으면 현재 청크를 줄여서 다음이 2 이상이 되도록
+        samplesToGenerate = remaining - minSamplesPerCall;
+      }
+
       const buffer = this.opl.generate(samplesToGenerate);
 
-      // 버퍼에서 유효한 부분만 복사 (samplesToGenerate * channels)
-      const validData = buffer.subarray(0, samplesToGenerate * channels);
+      // 버퍼에서 유효한 부분만 복사 (실제 필요한 만큼만)
+      const actualSamples = Math.min(samplesToGenerate, remaining);
+      const validData = buffer.subarray(0, actualSamples * channels);
       result.set(validData, offset * channels);
-      offset += samplesToGenerate;
+      offset += actualSamples;
     }
 
     return result;

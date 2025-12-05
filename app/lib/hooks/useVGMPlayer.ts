@@ -81,7 +81,6 @@ export function useVGMPlayer({
 
   // 백그라운드 처리
   const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
-  const needsAudioRecoveryRef = useRef<boolean>(false);
   const trackEndCallbackFiredRef = useRef<boolean>(false);
 
   // AudioContext 접근 헬퍼
@@ -338,12 +337,13 @@ export function useVGMPlayer({
    * Page Visibility API 처리
    */
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (!playerRef.current) return;
 
       const player = playerRef.current;
 
       if (document.hidden) {
+        // 백그라운드 진입: 재생 상태 저장, UI 타이머 중지
         wasPlayingBeforeBackgroundRef.current = player.getState().isPlaying;
 
         if (uiUpdateIntervalRef.current) {
@@ -351,7 +351,27 @@ export function useVGMPlayer({
           uiUpdateIntervalRef.current = null;
         }
       } else {
-        needsAudioRecoveryRef.current = true;
+        // 포그라운드 복귀: AudioContext 복구 및 UI 타이머 재시작
+        const currentContext = getAudioContext();
+        if (currentContext && currentContext.state === 'suspended') {
+          try {
+            await currentContext.resume();
+          } catch (e) {
+            console.warn('[useVGMPlayer] AudioContext resume failed:', e);
+          }
+        }
+
+        // UI 타이머 재시작 (재생 중인 경우)
+        if (player.getState().isPlaying && !uiUpdateIntervalRef.current) {
+          uiUpdateIntervalRef.current = setInterval(() => {
+            if (playerRef.current) {
+              setState(convertState(playerRef.current.getState(), fileNameRef.current));
+            }
+          }, 100);
+        }
+
+        // 즉시 상태 업데이트
+        setState(convertState(player.getState(), fileNameRef.current));
       }
     };
 
@@ -359,51 +379,7 @@ export function useVGMPlayer({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
-
-  /**
-   * 백그라운드 복귀 시 AudioContext 복구
-   */
-  useEffect(() => {
-    if (!needsAudioRecoveryRef.current) return;
-
-    const recoverAudio = async () => {
-      needsAudioRecoveryRef.current = false;
-
-      if (!playerRef.current || !getAudioContext()) return;
-
-      const recovered = await ensureAudioContextReady();
-      if (!recovered) {
-        setError('AudioContext 복구에 실패했습니다.');
-        return;
-      }
-
-      const player = playerRef.current;
-
-      if (wasPlayingBeforeBackgroundRef.current && !player.getState().isPlaying) {
-        player.play();
-
-        if (uiUpdateIntervalRef.current) {
-          clearInterval(uiUpdateIntervalRef.current);
-        }
-        uiUpdateIntervalRef.current = setInterval(() => {
-          if (playerRef.current) {
-            setState(convertState(playerRef.current.getState(), fileNameRef.current));
-          }
-        }, 100);
-
-        setState(convertState(player.getState(), fileNameRef.current));
-      } else if (player.getState().isPlaying && !uiUpdateIntervalRef.current) {
-        uiUpdateIntervalRef.current = setInterval(() => {
-          if (playerRef.current) {
-            setState(convertState(playerRef.current.getState(), fileNameRef.current));
-          }
-        }, 100);
-      }
-    };
-
-    recoverAudio();
-  }, [needsAudioRecoveryRef.current, ensureAudioContextReady, convertState]);
+  }, [getAudioContext, convertState]);
 
   /**
    * 재생 시작
