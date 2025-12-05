@@ -242,7 +242,7 @@ export function useVGMPlayer({
       const samples = player.generateSamples(lenFill);
 
       // VGM은 IMS/ROL보다 볼륨이 낮아서 보정 (곱하기 먼저 해서 정밀도 손실 최소화)
-      const volumeBoost = 2.0;
+      const volumeBoost = 1.5;
       for (let i = 0; i < lenFill; i++) {
         outputL[i] = (samples[i * 2] * volumeBoost) / 32768.0;
         outputR[i] = (samples[i * 2 + 1] * volumeBoost) / 32768.0;
