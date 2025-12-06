@@ -417,4 +417,11 @@ export class VGMPlayer {
   getTotalDuration(): number {
     return this.vgmData.header.totalSamples / VGM_SAMPLE_RATE;
   }
+
+  /**
+   * Get last register writes from OPL engine
+   */
+  getLastRegisterWrites(): Array<{reg: number, val: number}> {
+    return this.oplEngine.getLastRegisterWrites();
+  }
 }

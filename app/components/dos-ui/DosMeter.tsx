@@ -8,11 +8,10 @@ interface DosMeterProps {
   label: string;
   value: number; // 0-127
   maxValue?: number;
-  isMuted?: boolean;
-  onToggle?: () => void;
+  lastWrite?: {reg: number, val: number}; // 마지막 레지스터 쓰기
 }
 
-export default function DosMeter({ label, value, maxValue = 127, isMuted = false, onToggle }: DosMeterProps) {
+export default function DosMeter({ label, value, maxValue = 127, lastWrite }: DosMeterProps) {
   const [displayValue, setDisplayValue] = useState(value);
   const animationFrameRef = useRef<number | null>(null);
 
@@ -59,20 +58,22 @@ export default function DosMeter({ label, value, maxValue = 127, isMuted = false
   if (isMissing) {
     labelClass += " dos-meter-label-missing";
   }
-  // Mute 상태에서도 악기 이름은 명확하게 표시
+
+  // 레지스터 값을 16진수 문자열로 변환
+  const regHex = lastWrite?.reg !== undefined
+    ? lastWrite.reg.toString(16).toUpperCase().padStart(2, '0')
+    : '--';
+  const valHex = lastWrite?.val !== undefined
+    ? lastWrite.val.toString(16).toUpperCase().padStart(2, '0')
+    : '--';
 
   return (
-    <div className={`dos-meter-horizontal ${isMuted ? 'dos-meter-muted' : ''}`}>
-      {onToggle && (
-        <button
-          className={`dos-checkbox ${isMuted ? 'dos-checkbox-muted' : ''}`}
-          onClick={onToggle}
-          aria-label={isMuted ? "채널 켜기" : "채널 끄기"}
-        >
-          M
-        </button>
-      )}
+    <div className="dos-meter-horizontal">
       <div className={labelClass}>{displayLabel}</div>
+      <div className="dos-meter-reg-container">
+        <span className="dos-meter-reg">{regHex}</span>
+        <span className="dos-meter-val">{valHex}</span>
+      </div>
       <div className="dos-meter-segments">
         {Array.from({ length: totalSegments }).map((_, index) => {
           const isFilled = index < filledSegments;

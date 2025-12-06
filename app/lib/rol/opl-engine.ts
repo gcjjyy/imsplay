@@ -49,6 +49,18 @@ export class OPLEngine {
   private vibDepth: number = 0;
   private noteSel: number = 0;
 
+  // 채널별 마지막 레지스터 쓰기 추적
+  private lastRegisterWrites: Array<{reg: number, val: number}> =
+    Array.from({ length: 11 }, () => ({ reg: 0, val: 0 }));
+
+  // offset → slot 역방향 매핑 (offsetSlot의 역)
+  // offsetSlot = [0,1,2,3,4,5, 8,9,10,11,12,13, 16,17,18,19,20,21]
+  private static readonly offsetToSlot: readonly number[] = [
+    0, 1, 2, 3, 4, 5, 255, 255,   // offset 0-7
+    6, 7, 8, 9, 10, 11, 255, 255, // offset 8-15
+    12, 13, 14, 15, 16, 17        // offset 16-21
+  ];
+
   /**
    * OPL 초기화
    * @param sampleRate 샘플레이트 (기본값: 49716 Hz)
@@ -254,7 +266,9 @@ export class OPLEngine {
     if ((!this.percussion && voice < 9) || voice < constants.BD) {
       this.voiceKeyOn[voice] = 0;
       this.bxRegister[voice] &= ~0x20;
-      this.opl.write(0xb0 + voice, this.bxRegister[voice]);
+      const reg = 0xb0 + voice;
+      this.opl.write(reg, this.bxRegister[voice]);
+      this.trackRegisterWrite(reg, this.bxRegister[voice]);
     } else if (this.percussion && voice <= constants.HIHAT) {
       this.percBits &= ~constants.percMasks[voice - constants.BD];
       this.sndSAmVibRhythm();
@@ -308,6 +322,7 @@ export class OPLEngine {
   writeRegister(register: number, value: number): void {
     if (!this.opl) return;
     this.opl.write(register, value);
+    this.trackRegisterWrite(register, value);
   }
 
   // ==================== Private Helper Functions ====================
@@ -403,7 +418,9 @@ export class OPLEngine {
 
     t1 = 63 - t1;
     t1 |= this.paramSlot[slot][constants.prmKsl] << 6;
-    this.opl.write(0x40 + constants.offsetSlot[slot], t1);
+    const reg = 0x40 + constants.offsetSlot[slot];
+    this.opl.write(reg, t1);
+    this.trackRegisterWrite(reg, t1);
   }
 
   /**
@@ -542,11 +559,16 @@ export class OPLEngine {
     }
 
     // Write F-Number (lower 8 bits)
-    this.opl.write(0xa0 + voice, effNbr & 0xff);
+    const regA0 = 0xa0 + voice;
+    const valA0 = effNbr & 0xff;
+    this.opl.write(regA0, valA0);
+    this.trackRegisterWrite(regA0, valA0);
 
     // Write Key-On, Block, F-Number (upper 2 bits)
+    const regB0 = 0xb0 + voice;
     const t1 = keyOn | (octave << 2) | (effNbr >> 8);
-    this.opl.write(0xb0 + voice, t1);
+    this.opl.write(regB0, t1);
+    this.trackRegisterWrite(regB0, t1);
 
     return t1;
   }
@@ -566,5 +588,56 @@ export class OPLEngine {
     }
 
     return activeNotes;
+  }
+
+  /**
+   * 레지스터 주소를 채널(voice)로 변환
+   * @returns 채널 번호 (0-10) 또는 -1 (전역 레지스터)
+   */
+  private getVoiceFromRegister(register: number): number {
+    // 0xA0-0xA8, 0xB0-0xB8, 0xC0-0xC8: 하위 니블이 voice
+    if ((register >= 0xa0 && register <= 0xa8) ||
+        (register >= 0xb0 && register <= 0xb8) ||
+        (register >= 0xc0 && register <= 0xc8)) {
+      return register & 0x0f;
+    }
+
+    // 슬롯 기반 레지스터 (0x20, 0x40, 0x60, 0x80, 0xE0 계열)
+    const baseRegs = [0x20, 0x40, 0x60, 0x80, 0xe0];
+    for (const base of baseRegs) {
+      if (register >= base && register < base + 22) {
+        const offset = register - base;
+        if (offset < OPLEngine.offsetToSlot.length) {
+          const slot = OPLEngine.offsetToSlot[offset];
+          if (slot !== 255) {
+            // slot → voice 변환
+            const voiceSlotMap = this.percussion
+              ? constants.voicePSlot
+              : constants.voiceMSlot;
+            return voiceSlotMap[slot];
+          }
+        }
+      }
+    }
+
+    // 전역 레지스터 (0x01, 0x04, 0x08, 0xBD 등)
+    return -1;
+  }
+
+  /**
+   * 레지스터 쓰기 추적 (내부 호출용)
+   */
+  private trackRegisterWrite(register: number, value: number): void {
+    const voice = this.getVoiceFromRegister(register);
+    if (voice >= 0 && voice < this.lastRegisterWrites.length) {
+      this.lastRegisterWrites[voice] = { reg: register, val: value };
+    }
+  }
+
+  /**
+   * 마지막 레지스터 쓰기 정보 반환
+   */
+  getLastRegisterWrites(): Array<{reg: number, val: number}> {
+    return this.lastRegisterWrites;
   }
 }

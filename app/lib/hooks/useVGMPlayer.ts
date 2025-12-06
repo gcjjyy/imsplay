@@ -24,10 +24,10 @@ interface CompatiblePlaybackState {
   currentTick: number;    // VGM에서는 사용 안 함 (0 고정)
   currentVolumes: number[];
   instrumentNames: string[];
-  channelMuted: boolean[];
   fileName?: string;
   songName?: string;
   activeNotes?: Array<{ channel: number; note: number }>;
+  lastRegisterWrites?: Array<{reg: number, val: number}>;
 }
 
 interface UseVGMPlayerOptions {
@@ -52,7 +52,6 @@ interface UseVGMPlayerReturn {
   setTempo: (tempo: number) => void;
   setMasterVolume: (volume: number) => void;
   setLoopEnabled: (enabled: boolean) => void;
-  toggleChannel: (ch: number) => void;
 
   checkPlayerReady: () => boolean;
 }
@@ -99,7 +98,11 @@ export function useVGMPlayer({
   /**
    * VGM PlaybackState를 호환 형태로 변환
    */
-  const convertState = useCallback((vgmState: VGMPlaybackState, fileName: string): CompatiblePlaybackState => {
+  const convertState = useCallback((
+    vgmState: VGMPlaybackState,
+    fileName: string,
+    lastRegisterWrites?: Array<{reg: number, val: number}>
+  ): CompatiblePlaybackState => {
     // 9채널 볼륨을 11채널로 확장 (마지막 2개는 퍼커션용, 0으로 설정)
     const channelVolumes = [...vgmState.channelVolumes, 0, 0];
 
@@ -114,10 +117,10 @@ export function useVGMPlayer({
       currentTick: 0,    // VGM은 틱 사용 안 함
       currentVolumes: channelVolumes,
       instrumentNames: new Array(11).fill('VGM'), // VGM은 악기명 없음
-      channelMuted: new Array(11).fill(false),
       fileName,
       songName: fileName.replace(/\.(vgm|vgz)$/i, ''),
       activeNotes: vgmState.activeNotes,
+      lastRegisterWrites,
     };
   }, []);
 
@@ -188,7 +191,7 @@ export function useVGMPlayer({
 
         // 초기 상태 설정
         fileNameRef.current = vgmFile.name;
-        setState(convertState(player.getState(), vgmFile.name));
+        setState(convertState(player.getState(), vgmFile.name, player.getLastRegisterWrites()));
         setIsPlayerReady(true);
         setIsLoading(false);
       } catch (err) {
@@ -367,13 +370,13 @@ export function useVGMPlayer({
         if (player.getState().isPlaying && !uiUpdateIntervalRef.current) {
           uiUpdateIntervalRef.current = setInterval(() => {
             if (playerRef.current) {
-              setState(convertState(playerRef.current.getState(), fileNameRef.current));
+              setState(convertState(playerRef.current.getState(), fileNameRef.current, playerRef.current.getLastRegisterWrites()));
             }
           }, 100);
         }
 
         // 즉시 상태 업데이트
-        setState(convertState(player.getState(), fileNameRef.current));
+        setState(convertState(player.getState(), fileNameRef.current, player.getLastRegisterWrites()));
       }
     };
 
@@ -400,11 +403,11 @@ export function useVGMPlayer({
 
     uiUpdateIntervalRef.current = setInterval(() => {
       if (playerRef.current) {
-        setState(convertState(playerRef.current.getState(), fileNameRef.current));
+        setState(convertState(playerRef.current.getState(), fileNameRef.current, playerRef.current.getLastRegisterWrites()));
       }
     }, 100);
 
-    setState(convertState(playerRef.current.getState(), fileNameRef.current));
+    setState(convertState(playerRef.current.getState(), fileNameRef.current, playerRef.current.getLastRegisterWrites()));
   }, [ensureAudioContextReady, convertState, getAudioContext]);
 
   /**
@@ -420,7 +423,7 @@ export function useVGMPlayer({
       uiUpdateIntervalRef.current = null;
     }
 
-    setState(convertState(playerRef.current.getState(), fileNameRef.current));
+    setState(convertState(playerRef.current.getState(), fileNameRef.current, playerRef.current.getLastRegisterWrites()));
   }, [convertState]);
 
   /**
@@ -436,7 +439,7 @@ export function useVGMPlayer({
       uiUpdateIntervalRef.current = null;
     }
 
-    setState(convertState(playerRef.current.getState(), fileNameRef.current));
+    setState(convertState(playerRef.current.getState(), fileNameRef.current, playerRef.current.getLastRegisterWrites()));
   }, [convertState]);
 
   /**
@@ -445,7 +448,7 @@ export function useVGMPlayer({
   const setVolume = useCallback((volume: number) => {
     if (!playerRef.current) return;
     playerRef.current.setVolume(volume);
-    setState(convertState(playerRef.current.getState(), fileNameRef.current));
+    setState(convertState(playerRef.current.getState(), fileNameRef.current, playerRef.current.getLastRegisterWrites()));
   }, [convertState]);
 
   /**
@@ -461,13 +464,6 @@ export function useVGMPlayer({
   const setLoopEnabled = useCallback((enabled: boolean) => {
     if (!playerRef.current) return;
     playerRef.current.setLoopEnabled(enabled);
-  }, []);
-
-  /**
-   * 채널 토글 (VGM은 채널 제어 불가 - 무시)
-   */
-  const toggleChannel = useCallback((_ch: number) => {
-    // VGM은 레지스터 직접 쓰기라 채널 뮤트 불가
   }, []);
 
   /**
@@ -499,7 +495,6 @@ export function useVGMPlayer({
     setTempo,
     setMasterVolume,
     setLoopEnabled,
-    toggleChannel,
     checkPlayerReady,
   };
 }

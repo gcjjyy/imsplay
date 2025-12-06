@@ -106,9 +106,9 @@ export interface IMSPlaybackState {
   /** 각 채널의 악기명 */
   instrumentNames?: string[];
 
-  /** 각 채널의 뮤트 상태 (디버깅용) */
-  channelMuted?: boolean[];
-
   /** 현재 재생 중인 노트 정보 (채널별) */
   activeNotes?: Array<{ channel: number; note: number }>;
+
+  /** 각 채널의 마지막 레지스터 쓰기 (주소, 값) */
+  lastRegisterWrites?: Array<{reg: number, val: number}>;
 }

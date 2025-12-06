@@ -1161,7 +1161,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v1.51
+        {" "}IMS/ROL 웹플레이어 v1.57
       </div>
 
       {/* 메인 그리드 */}
@@ -1470,8 +1470,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
           <ChannelVisualizer
             channelVolumes={state?.currentVolumes ?? Array(11).fill(0)}
             instrumentNames={state?.instrumentNames}
-            channelMuted={state?.channelMuted ?? Array(11).fill(false)}
-            onToggleChannel={format === "IMS" ? imsPlayer.toggleChannel : format === "ROL" ? rolPlayer.toggleChannel : format === "VGM" ? vgmPlayer.toggleChannel : imsPlayer.toggleChannel}
+            lastRegisterWrites={state?.lastRegisterWrites}
           />
 
           {/* 가사 / 크레딧 */}

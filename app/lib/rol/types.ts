@@ -155,8 +155,8 @@ export interface PlaybackState {
   currentTick: number;      // 현재 틱 위치 (ISS 가사 동기화용, ROL은 사용 안 함)
   currentVolumes: number[]; // 각 채널의 현재 볼륨
   instrumentNames?: string[]; // 각 채널의 악기명
-  channelMuted?: boolean[]; // 각 채널의 뮤트 상태 (디버깅용)
   activeNotes?: Array<{ channel: number; note: number }>; // 현재 재생 중인 노트 정보
+  lastRegisterWrites?: Array<{reg: number, val: number}>; // 각 채널의 마지막 레지스터 쓰기
 }
 
 /**

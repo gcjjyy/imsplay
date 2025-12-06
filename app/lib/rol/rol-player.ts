@@ -36,7 +36,6 @@ export class ROLPlayer {
   private displayVolumes: number[] = new Array(11).fill(0);  // 디스플레이용 볼륨 (decay 효과)
   private channelInstruments: string[] = new Array(11).fill("");  // 채널별 현재 악기명 (화면 표시용)
   private INS_DATA: Map<number, number[]> = new Map();
-  private channelMuted: boolean[] = new Array(11).fill(false);  // 채널 뮤트 상태 (디버깅용)
 
   private isPlaying: boolean = false;
   private loopEnabled: boolean = false;
@@ -168,12 +167,6 @@ export class ROLPlayer {
     const i = channel.ticksData[this.TICH[ch] + 1];
 
     if (i === this.CUR_BYTE) {
-      // 채널이 뮤트되어 있으면 스킵
-      if (this.channelMuted[ch]) {
-        this.TICH[ch] += 2;
-        return;
-      }
-
       this.oplEngine.noteOff(ch);
       const note = channel.ticksData[this.TICH[ch]];
       const vol = this.CUR_VOL[ch];
@@ -362,27 +355,9 @@ export class ROLPlayer {
       currentTick: 0, // ROL은 ISS 가사를 사용하지 않으므로 항상 0
       currentVolumes: this.displayVolumes.slice(0, this.rolData.channelNum),
       instrumentNames: this.channelInstruments.slice(0, this.rolData.channelNum),
-      channelMuted: this.channelMuted.slice(0, this.rolData.channelNum),
       activeNotes: this.oplEngine.getActiveNotes(),
+      lastRegisterWrites: this.oplEngine.getLastRegisterWrites().slice(0, this.rolData.channelNum),
     };
-  }
-
-  /**
-   * 채널 뮤트 토글 (디버깅용)
-   */
-  toggleChannel(ch: number): void {
-    if (ch >= 0 && ch < this.rolData.channelNum) {
-      this.channelMuted[ch] = !this.channelMuted[ch];
-
-      if (this.channelMuted[ch]) {
-        // 뮤트: 현재 재생 중인 노트를 끄고 볼륨을 0으로
-        this.oplEngine.noteOff(ch);
-        this.oplEngine.setVoiceVolume(ch, 0);
-      } else {
-        // 언뮤트: 저장된 볼륨 복원
-        this.oplEngine.setVoiceVolume(ch, this.CH_VOL[ch]);
-      }
-    }
   }
 
   /**

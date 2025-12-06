@@ -26,7 +26,6 @@ export class IMSPlayer {
   private currentTempo: number;
   private currentTick: number = 0;  // ISS 가사 동기화용 틱 카운터
   private channelInstruments: string[] = new Array(11).fill("");
-  private channelMuted: boolean[] = new Array(11).fill(false);  // 채널 뮤트 상태 (디버깅용)
 
   // 제어 변수
   private VOL_C: number = 127;  // 전체 볼륨 (0-127)
@@ -320,11 +319,6 @@ export class IMSPlayer {
     const volume = this.readByte();
     this.curByte++;
 
-    // 채널이 뮤트되어 있으면 스킵
-    if (this.channelMuted[ch]) {
-      return;
-    }
-
     this.oplEngine.noteOff(ch);
 
     if (this.curVol[ch] !== volume) {
@@ -349,11 +343,6 @@ export class IMSPlayer {
 
     const volume = this.readByte();
     this.curByte++;
-
-    // 채널이 뮤트되어 있으면 스킵
-    if (this.channelMuted[ch]) {
-      return;
-    }
 
     this.oplEngine.noteOff(ch);
 
@@ -557,28 +546,10 @@ export class IMSPlayer {
       currentTick: this.currentTick,
       currentVolumes: this.displayVolumes.slice(0, this.imsData.chNum),
       instrumentNames: this.channelInstruments.slice(0, this.imsData.chNum),
-      channelMuted: this.channelMuted.slice(0, this.imsData.chNum),
       activeNotes: this.oplEngine.getActiveNotes(),
+      lastRegisterWrites: this.oplEngine.getLastRegisterWrites().slice(0, this.imsData.chNum),
       songName: this.imsData.songName || "",
     };
-  }
-
-  /**
-   * 채널 뮤트 토글 (디버깅용)
-   */
-  toggleChannel(ch: number): void {
-    if (ch >= 0 && ch < this.imsData.chNum) {
-      this.channelMuted[ch] = !this.channelMuted[ch];
-
-      if (this.channelMuted[ch]) {
-        // 뮤트: 현재 재생 중인 노트를 끄고 볼륨을 0으로
-        this.oplEngine.noteOff(ch);
-        this.oplEngine.setVoiceVolume(ch, 0);
-      } else {
-        // 언뮤트: 저장된 볼륨 복원
-        this.oplEngine.setVoiceVolume(ch, this.curVol[ch]);
-      }
-    }
   }
 
   /**
