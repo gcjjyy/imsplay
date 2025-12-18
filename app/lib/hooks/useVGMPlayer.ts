@@ -82,6 +82,9 @@ export function useVGMPlayer({
   const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
   const trackEndCallbackFiredRef = useRef<boolean>(false);
 
+  // 1곡 반복 모드 상태 (ref로 관리하여 onaudioprocess에서 최신 값 접근)
+  const loopEnabledRef = useRef<boolean>(false);
+
   // AudioContext 접근 헬퍼
   const getAudioContext = useCallback(() => {
     return sharedAudioContextRef?.current ?? localAudioContextRef.current;
@@ -227,7 +230,12 @@ export function useVGMPlayer({
 
       // 트랙 종료 감지
       if (player.hasEnded()) {
-        if (!trackEndCallbackFiredRef.current && onTrackEnd) {
+        // 1곡 반복 모드: 플레이어 재시작
+        if (loopEnabledRef.current) {
+          player.stop();
+          player.play();
+          trackEndCallbackFiredRef.current = false; // 다음 루프를 위해 리셋
+        } else if (!trackEndCallbackFiredRef.current && onTrackEnd) {
           trackEndCallbackFiredRef.current = true;
           setTimeout(() => onTrackEnd(), 0);
         }
@@ -462,6 +470,7 @@ export function useVGMPlayer({
    * 루프 설정
    */
   const setLoopEnabled = useCallback((enabled: boolean) => {
+    loopEnabledRef.current = enabled;
     if (!playerRef.current) return;
     playerRef.current.setLoopEnabled(enabled);
   }, []);

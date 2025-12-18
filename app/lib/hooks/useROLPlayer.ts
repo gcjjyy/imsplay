@@ -106,6 +106,9 @@ export function useROLPlayer({
   // 트랙 종료 콜백 중복 호출 방지
   const trackEndCallbackFiredRef = useRef<boolean>(false);
 
+  // 1곡 반복 모드 상태 (ref로 관리하여 onaudioprocess에서 최신 값 접근)
+  const loopEnabledRef = useRef<boolean>(false);
+
   /**
    * ROL/BNK 파일 로드 및 플레이어 초기화
    */
@@ -229,7 +232,12 @@ export function useROLPlayer({
 
       // 트랙 종료 감지 (백그라운드에서도 작동)
       if (!state.isPlaying && state.currentByte >= state.totalSize - 100) {
-        if (!trackEndCallbackFiredRef.current && onTrackEnd) {
+        // 1곡 반복 모드: 플레이어 재시작
+        if (loopEnabledRef.current) {
+          player.stop();
+          player.play();
+          trackEndCallbackFiredRef.current = false; // 다음 루프를 위해 리셋
+        } else if (!trackEndCallbackFiredRef.current && onTrackEnd) {
           trackEndCallbackFiredRef.current = true;
           // 다음 이벤트 루프에서 콜백 호출 (React 상태 업데이트 허용)
           setTimeout(() => {
@@ -756,6 +764,7 @@ export function useROLPlayer({
    * 루프 활성화/비활성화
    */
   const setLoopEnabled = useCallback((enabled: boolean) => {
+    loopEnabledRef.current = enabled;
     if (!playerRef.current) return;
     playerRef.current.setLoopEnabled(enabled);
   }, []);
