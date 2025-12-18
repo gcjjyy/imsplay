@@ -533,8 +533,14 @@ export class IMSPlayer {
     this.isPlaying = false;
     this.curByte = 0;
     this.runningStatus = 0;
-    // 모든 채널 끄기
+    this.currentTempo = this.imsData.basicTempo;
+    this.currentTick = 0;
+    // 모든 채널 상태 초기화 (루프 재생을 위해)
     for (let i = 0; i < 11; i++) {
+      this.curVol[i] = 0;
+      this.displayVolumes[i] = 0;
+      this.channelInstruments[i] = "";
+      this.channelMuted[i] = false;
       this.oplEngine.noteOff(i);
       this.oplEngine.setVoiceVolume(i, 0);
     }

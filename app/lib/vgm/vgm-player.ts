@@ -100,9 +100,18 @@ export class VGMPlayer {
     this.commandIndex = 0;
     this.currentSample = 0;
 
-    // Reset OPL
+    // Reset all channel states (for loop playback)
     for (let i = 0; i < 9; i++) {
+      this.channelKeyOn[i] = false;
+      this.channelVolumes[i] = 0;
+      this.displayVolumes[i] = 0;
+      this.channelNotes[i] = 0;
+      this.channelFNum[i] = 0;
+      this.channelBlock[i] = 0;
       this.oplEngine.noteOff(i);
+    }
+    for (let i = 0; i < 18; i++) {
+      this.slotLevels[i] = 63;
     }
   }
 

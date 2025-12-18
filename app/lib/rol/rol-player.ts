@@ -326,8 +326,13 @@ export class ROLPlayer {
   stop(): void {
     this.isPlaying = false;
     this.rewind();
+    // 모든 채널 상태 초기화 (루프 재생을 위해)
     for (let i = 0; i < this.rolData.channelNum; i++) {
+      this.CUR_VOL[i] = 127;
+      this.displayVolumes[i] = 0;
+      this.channelInstruments[i] = "";
       this.oplEngine.noteOff(i);
+      this.oplEngine.setVoiceVolume(i, 0);
     }
   }
 
