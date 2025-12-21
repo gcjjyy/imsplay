@@ -316,6 +316,9 @@ export function useIMSPlayer({
         const mediaStreamDest = audioContext.createMediaStreamDestination();
         mediaStreamDestRef.current = mediaStreamDest;
         gainNode.connect(mediaStreamDest);
+
+        // 기존 스트림 정리 후 새 스트림 연결
+        audioElementRef.current.pause();
         audioElementRef.current.srcObject = mediaStreamDest.stream;
         console.log('[useIMSPlayer] MediaStreamDestination 연결 완료');
       } catch (error) {

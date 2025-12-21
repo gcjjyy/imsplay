@@ -294,22 +294,22 @@ export function useROLPlayer({
 
     // MediaStreamDestination 연결 (Media Session API 지원)
     // audio 태그를 통해 출력하여 블루투스 컨트롤 지원
-    try {
-      const mediaStreamDest = audioContext.createMediaStreamDestination();
-      mediaStreamDestRef.current = mediaStreamDest;
-      gainNode.connect(mediaStreamDest);
+    if (audioElementRef?.current) {
+      try {
+        const mediaStreamDest = audioContext.createMediaStreamDestination();
+        mediaStreamDestRef.current = mediaStreamDest;
+        gainNode.connect(mediaStreamDest);
 
-      // Audio 요소에 스트림 연결
-      if (audioElementRef?.current) {
+        // 기존 스트림 정리 후 새 스트림 연결
+        audioElementRef.current.pause();
         audioElementRef.current.srcObject = mediaStreamDest.stream;
         console.log('[useROLPlayer] MediaStreamDestination 연결 완료');
-      } else {
-        // audioElementRef가 없으면 폴백으로 직접 출력
-        console.warn('[useROLPlayer] audioElementRef 없음, 직접 출력으로 폴백');
+      } catch (error) {
+        console.warn('[useROLPlayer] MediaStreamDestination 실패, 직접 출력:', error);
         gainNode.connect(audioContext.destination);
       }
-    } catch (error) {
-      console.warn('[useROLPlayer] MediaStreamDestination 생성 실패, 폴백 사용:', error);
+    } else {
+      // audioElementRef가 없으면 직접 출력
       gainNode.connect(audioContext.destination);
     }
 
