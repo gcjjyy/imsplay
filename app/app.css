@@ -112,13 +112,13 @@
     --meter-mid: #e6db74;
     --meter-high: #fd971f;
 
-    /* Piano (밝은 톤 유지) */
-    --piano-white-key: #c8c8c8;
+    /* Piano */
+    --piano-white-key: #88846f;
     --piano-white-key-active: #e8e8e8;
-    --piano-white-key-border: #88846f;
-    --piano-black-key: #414339;
+    --piano-white-key-border: #5a5a4a;
+    --piano-black-key: #272822;
     --piano-black-key-active: #e8e8e8;
-    --piano-black-key-border: #272822;
+    --piano-black-key-border: #1e1f1c;
 
     /* Lyrics */
     --lyrics-highlight: #a6e22e;
