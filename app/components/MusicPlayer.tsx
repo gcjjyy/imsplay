@@ -266,6 +266,10 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   // 트랙 종료 콜백 ref (정의 순서 문제 해결)
   const playNextTrackRef = useRef<(() => void) | null>(null);
 
+  // 셔플 재생 히스토리 (이전 곡으로 돌아가기 위해)
+  const shuffleHistoryRef = useRef<number[]>([]);
+  const shuffleHistoryIndexRef = useRef<number>(-1);
+
   // 강제 재로드 플래그 (트랙 재생 버튼 클릭 시 AudioContext 완전 재생성)
   const forceReloadRef = useRef<boolean>(false);
 
@@ -775,21 +779,53 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   }, [repeatMode, format, currentMusicFile]);
 
   /**
+   * 셔플 히스토리 초기화 (첫 재생 시 현재 곡 추가)
+   */
+  useEffect(() => {
+    if (repeatMode === 'shuffle' && state?.isPlaying) {
+      // 히스토리가 비어있거나 마지막 항목이 현재 곡이 아니면 추가
+      const lastIndex = shuffleHistoryRef.current[shuffleHistoryRef.current.length - 1];
+      if (shuffleHistoryRef.current.length === 0 || lastIndex !== playingTrackIndex) {
+        // playNextTrack에서 이미 추가된 경우가 아닐 때만 추가
+        if (shuffleHistoryIndexRef.current < 0 || shuffleHistoryRef.current[shuffleHistoryIndexRef.current] !== playingTrackIndex) {
+          shuffleHistoryRef.current.push(playingTrackIndex);
+          shuffleHistoryIndexRef.current = shuffleHistoryRef.current.length - 1;
+        }
+      }
+    }
+  }, [repeatMode, state?.isPlaying, playingTrackIndex]);
+
+  /**
+   * 셔플 모드 해제 시 히스토리 초기화
+   */
+  useEffect(() => {
+    if (repeatMode !== 'shuffle') {
+      shuffleHistoryRef.current = [];
+      shuffleHistoryIndexRef.current = -1;
+    }
+  }, [repeatMode]);
+
+  /**
+   * 사용자 폴더 변경 시 셔플 히스토리 초기화
+   */
+  useEffect(() => {
+    shuffleHistoryRef.current = [];
+    shuffleHistoryIndexRef.current = -1;
+  }, [userFolderName]);
+
+  /**
    * 이전 곡 재생
    */
   const playPreviousTrack = useCallback(() => {
     setShouldAutoScroll(true);
     if (repeatMode === 'shuffle') {
-      // 현재 곡을 제외한 랜덤 선택
-      let randomIndex;
-      if (musicList.length > 1) {
-        do {
-          randomIndex = Math.floor(Math.random() * musicList.length);
-        } while (randomIndex === playingTrackIndex);
-      } else {
-        randomIndex = 0;
+      // 셔플 모드: 히스토리에서 이전 곡으로 이동
+      if (shuffleHistoryIndexRef.current > 0) {
+        shuffleHistoryIndexRef.current--;
+        const prevIndex = shuffleHistoryRef.current[shuffleHistoryIndexRef.current];
+        loadTrack(prevIndex, undefined, undefined, undefined, true);
       }
-      loadTrack(randomIndex, undefined, undefined, undefined, true);
+      // 히스토리가 없으면 아무 것도 안 함
     } else {
       // 'all' 또는 'one' 모드: 순환 재생
       const prevIndex = playingTrackIndex === 0 ? musicList.length - 1 : playingTrackIndex - 1;
@@ -803,16 +839,27 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const playNextTrack = useCallback(() => {
     setShouldAutoScroll(true);
     if (repeatMode === 'shuffle') {
-      // 현재 곡을 제외한 랜덤 선택
-      let randomIndex;
-      if (musicList.length > 1) {
-        do {
-          randomIndex = Math.floor(Math.random() * musicList.length);
-        } while (randomIndex === playingTrackIndex);
+      // 셔플 모드: 히스토리에서 다음 곡이 있으면 재생, 없으면 새 랜덤 곡 추가
+      if (shuffleHistoryIndexRef.current < shuffleHistoryRef.current.length - 1) {
+        // 히스토리에서 다음 곡으로 이동
+        shuffleHistoryIndexRef.current++;
+        const nextIndex = shuffleHistoryRef.current[shuffleHistoryIndexRef.current];
+        loadTrack(nextIndex, undefined, undefined, undefined, true);
       } else {
-        randomIndex = 0;
+        // 새 랜덤 곡 추가
+        let randomIndex;
+        if (musicList.length > 1) {
+          do {
+            randomIndex = Math.floor(Math.random() * musicList.length);
+          } while (randomIndex === playingTrackIndex);
+        } else {
+          randomIndex = 0;
+        }
+        // 히스토리에 추가
+        shuffleHistoryRef.current.push(randomIndex);
+        shuffleHistoryIndexRef.current = shuffleHistoryRef.current.length - 1;
+        loadTrack(randomIndex, undefined, undefined, undefined, true);
       }
-      loadTrack(randomIndex, undefined, undefined, undefined, true);
     } else {
       // 'all' 또는 'one' 모드: 순환 재생
       const nextIndex = (playingTrackIndex + 1) % musicList.length;
@@ -1164,7 +1211,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                 {/* 이전 곡 */}
                 <DosButton
                   onClick={playPreviousTrack}
-                  disabled={!state}
+                  disabled={!state?.isPlaying}
                   style={{
                     flex: 1,
                     height: '28px',
@@ -1199,7 +1246,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                 {/* 정지 */}
                 <DosButton
                   onClick={stop}
-                  disabled={!state}
+                  disabled={!state?.isPlaying}
                   style={{
                     flex: 1,
                     height: '28px',
@@ -1215,7 +1262,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                 {/* 다음 곡 */}
                 <DosButton
                   onClick={playNextTrack}
-                  disabled={!state}
+                  disabled={!state?.isPlaying}
                   style={{
                     flex: 1,
                     height: '28px',

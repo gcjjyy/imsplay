@@ -70,59 +70,59 @@
   --lyrics-normal: #C0C0C0;
 }
 
-/* Dark Mode (Obsidian Dark Theme) */
+/* Dark Mode (Monokai Pro Theme) */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Obsidian Dark palette */
-    --color-black: #0d0d0d;
-    --color-maroon: #e05050;
-    --color-green: #50c050;
-    --color-olive: #c0a050;
-    --color-navy: #404040;
-    --color-purple: #7f6df2;
-    --color-teal: #262626;
-    --color-silver: #888888;
-    --color-gray: #2d2d2d;
-    --color-red: #e05050;
-    --color-lime: #50c050;
-    --color-yellow: #e0c050;
-    --color-blue: #2d2d2d;
-    --color-fuchsia: #363636;
-    --color-aqua: #50b0c0;
-    --color-white: #dcddde;
+    /* Monokai Pro palette */
+    --color-black: #19181a;
+    --color-maroon: #ff6188;
+    --color-green: #a9dc76;
+    --color-olive: #fc9867;
+    --color-navy: #403e41;
+    --color-purple: #ab9df2;
+    --color-teal: #2d2a2e;
+    --color-silver: #939293;
+    --color-gray: #403e41;
+    --color-red: #ff6188;
+    --color-lime: #a9dc76;
+    --color-yellow: #ffd866;
+    --color-blue: #403e41;
+    --color-fuchsia: #4a474b;
+    --color-aqua: #78dce8;
+    --color-white: #fcfcfa;
 
     /* UI colors */
-    --bg-main: #1e1e1e;
-    --text-main: #dcddde;
-    --text-emphasis: #7f6df2;
-    --text-disabled: #666666;
+    --bg-main: #2d2a2e;
+    --text-main: #fcfcfa;
+    --text-emphasis: #ab9df2;
+    --text-disabled: #727072;
 
     /* 3D borders */
-    --border-highlight: #404040;
-    --border-light: #404040;
-    --border-shadow: #0d0d0d;
-    --border-dark: #000000;
+    --border-highlight: #5b595c;
+    --border-light: #5b595c;
+    --border-shadow: #19181a;
+    --border-dark: #19181a;
 
     /* Selection */
-    --bg-select: #404040;
-    --text-select: #dcddde;
+    --bg-select: #5b595c;
+    --text-select: #fcfcfa;
 
     /* Meters */
-    --meter-low: #50c050;
-    --meter-mid: #e0c050;
-    --meter-high: #e08050;
+    --meter-low: #a9dc76;
+    --meter-mid: #ffd866;
+    --meter-high: #fc9867;
 
-    /* Piano */
-    --piano-white-key: #2d2d2d;
-    --piano-white-key-active: #404040;
-    --piano-white-key-border: #1e1e1e;
-    --piano-black-key: #0d0d0d;
-    --piano-black-key-active: #2d2d2d;
-    --piano-black-key-border: #1e1e1e;
+    /* Piano (밝은 톤 유지) */
+    --piano-white-key: #c8c8c8;
+    --piano-white-key-active: #a9dc76;
+    --piano-white-key-border: #939293;
+    --piano-black-key: #403e41;
+    --piano-black-key-active: #78dce8;
+    --piano-black-key-border: #2d2a2e;
 
     /* Lyrics */
-    --lyrics-highlight: #50c050;
-    --lyrics-normal: #666666;
+    --lyrics-highlight: #a9dc76;
+    --lyrics-normal: #727072;
   }
 }
 
@@ -352,11 +352,11 @@ body {
 }
 
 .dos-list-item:hover {
-  background: var(--bg-main);
+  background: var(--bg-select);
 }
 
 .dos-list-item-selected {
-  background: var(--bg-select);
+  background: var(--bg-main);
   color: var(--text-select);
 }
 
@@ -882,6 +882,7 @@ body {
 
 /* ==========================================
    Dark Mode Overrides (파일 끝에 위치해야 함)
+   Monokai Pro Theme
    ========================================== */
 @media (prefers-color-scheme: dark) {
   /* 리스트/입력 배경 */
@@ -889,52 +890,52 @@ body {
   .inset,
   .inset-deep,
   .dos-progress-bar {
-    background: #262626;
+    background: #363338;
   }
 
   /* 버튼 스타일 */
   .dos-button {
-    color: #dcddde;
-    background: #2d2d2d;
+    color: #fcfcfa;
+    background: #403e41;
   }
 
   .dos-button:hover:not(:disabled) {
-    background: #404040;
+    background: #5b595c;
   }
 
   .dos-button:disabled {
-    color: #666666;
+    color: #727072;
   }
 
   /* 슬라이더 트랙 */
   .dos-slider-input::-webkit-slider-runnable-track {
-    background: #262626;
+    background: #363338;
   }
   .dos-slider-input::-moz-range-track {
-    background: #262626;
+    background: #363338;
   }
 
   /* 슬라이더 thumb */
   .dos-slider-input::-webkit-slider-thumb {
-    background: #7f6df2;
+    background: #5b595c;
   }
   .dos-slider-input::-moz-range-thumb {
-    background: #7f6df2;
+    background: #5b595c;
   }
 
   /* 리셋 버튼 */
   .dos-reset-button {
-    background: #2d2d2d;
-    color: #dcddde;
+    background: #403e41;
+    color: #fcfcfa;
   }
   .dos-reset-button:hover {
-    background: #404040;
+    background: #5b595c;
   }
 
   /* 상태바 테두리 */
   .dos-status-bar {
-    border-top-color: #404040;
-    border-left-color: #404040;
+    border-top-color: #5b595c;
+    border-left-color: #5b595c;
   }
 
   /* 스크롤바 */
@@ -943,22 +944,22 @@ body {
     height: 12px;
   }
   ::-webkit-scrollbar-track {
-    background: #262626;
+    background: #363338;
   }
   ::-webkit-scrollbar-thumb {
-    background: #404040;
-    border: 1px solid #1e1e1e;
+    background: #5b595c;
+    border: 1px solid #2d2a2e;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #505050;
+    background: #727072;
   }
   ::-webkit-scrollbar-corner {
-    background: #262626;
+    background: #363338;
   }
 
   /* Firefox 스크롤바 */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #404040 #262626;
+    scrollbar-color: #5b595c #363338;
   }
 }
