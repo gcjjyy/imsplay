@@ -114,10 +114,10 @@
 
     /* Piano (밝은 톤 유지) */
     --piano-white-key: #c8c8c8;
-    --piano-white-key-active: #a9dc76;
+    --piano-white-key-active: #e8e8e8;
     --piano-white-key-border: #939293;
     --piano-black-key: #403e41;
-    --piano-black-key-active: #78dce8;
+    --piano-black-key-active: #e8e8e8;
     --piano-black-key-border: #2d2a2e;
 
     /* Lyrics */
