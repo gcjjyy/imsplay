@@ -938,6 +938,20 @@ body {
     border-left-color: #5a5a4a;
   }
 
+  /* 뱃지 색상 */
+  .dos-badge-ims {
+    background: #66d9ef;
+    color: #1e1f1c;
+  }
+  .dos-badge-rol {
+    background: #a6e22e;
+    color: #1e1f1c;
+  }
+  .dos-badge-vgm {
+    background: #ae81ff;
+    color: #1e1f1c;
+  }
+
   /* 스크롤바 */
   ::-webkit-scrollbar {
     width: 12px;
