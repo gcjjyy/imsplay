@@ -178,13 +178,13 @@ export default function LyricsDisplay({
             {/* 재생된 부분 (연두색 하이라이트) */}
             <span
               style={{
-                color: '#7FFF00',
+                color: 'var(--lyrics-highlight)',
               }}
             >
               {currentLine.substring(0, highlightEnd)}
             </span>
             {/* 아직 재생 안 된 부분 (회색) */}
-            <span style={{ color: '#C0C0C0' }}>
+            <span style={{ color: 'var(--lyrics-normal)' }}>
               {currentLine.substring(highlightEnd)}
             </span>
           </>
@@ -197,7 +197,7 @@ export default function LyricsDisplay({
           style={{
             fontSize: '16px',
             fontFamily: 'inherit',
-            color: '#C0C0C0',
+            color: 'var(--lyrics-normal)',
             lineHeight: '1.4',
             minHeight: '24px',
           }}

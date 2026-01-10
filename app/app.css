@@ -56,6 +56,74 @@
   --meter-low: #00FF00;
   --meter-mid: #FFFF00;
   --meter-high: #FFBB99;
+
+  /* Piano */
+  --piano-white-key: #FFFFFF;
+  --piano-white-key-active: #C0C0C0;
+  --piano-white-key-border: #A0A0A0;
+  --piano-black-key: #2A2A2A;
+  --piano-black-key-active: #808080;
+  --piano-black-key-border: #808080;
+
+  /* Lyrics */
+  --lyrics-highlight: #7FFF00;
+  --lyrics-normal: #C0C0C0;
+}
+
+/* Dark Mode (Obsidian Dark Theme) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Obsidian Dark palette */
+    --color-black: #0d0d0d;
+    --color-maroon: #e05050;
+    --color-green: #50c050;
+    --color-olive: #c0a050;
+    --color-navy: #404040;
+    --color-purple: #7f6df2;
+    --color-teal: #262626;
+    --color-silver: #888888;
+    --color-gray: #2d2d2d;
+    --color-red: #e05050;
+    --color-lime: #50c050;
+    --color-yellow: #e0c050;
+    --color-blue: #2d2d2d;
+    --color-fuchsia: #363636;
+    --color-aqua: #50b0c0;
+    --color-white: #dcddde;
+
+    /* UI colors */
+    --bg-main: #1e1e1e;
+    --text-main: #dcddde;
+    --text-emphasis: #7f6df2;
+    --text-disabled: #666666;
+
+    /* 3D borders */
+    --border-highlight: #404040;
+    --border-light: #404040;
+    --border-shadow: #0d0d0d;
+    --border-dark: #000000;
+
+    /* Selection */
+    --bg-select: #404040;
+    --text-select: #dcddde;
+
+    /* Meters */
+    --meter-low: #50c050;
+    --meter-mid: #e0c050;
+    --meter-high: #e08050;
+
+    /* Piano */
+    --piano-white-key: #2d2d2d;
+    --piano-white-key-active: #404040;
+    --piano-white-key-border: #1e1e1e;
+    --piano-black-key: #0d0d0d;
+    --piano-black-key-active: #2d2d2d;
+    --piano-black-key-border: #1e1e1e;
+
+    /* Lyrics */
+    --lyrics-highlight: #50c050;
+    --lyrics-normal: #666666;
+  }
 }
 
 * {
@@ -740,11 +808,15 @@ body {
 .piano-key-white {
   flex: 1;
   height: 100%;
-  background: var(--color-white);
-  border-right: 1px solid #A0A0A0;
-  border-bottom: 1px solid #A0A0A0;
+  background: var(--piano-white-key);
+  border-right: 1px solid var(--piano-white-key-border);
+  border-bottom: 1px solid var(--piano-white-key-border);
   transition: background-color 0.05s;
   box-sizing: border-box;
+}
+
+.piano-key-white-active {
+  background: var(--piano-white-key-active);
 }
 
 .piano-keys-black {
@@ -760,14 +832,18 @@ body {
   position: absolute;
   width: 1.2%;
   height: 100%;
-  background: #2A2A2A;
-  border-top: 1px solid #808080;
-  border-left: 1px solid #808080;
+  background: var(--piano-black-key);
+  border-top: 1px solid var(--piano-black-key-border);
+  border-left: 1px solid var(--piano-black-key-border);
   border-right: 1px solid var(--color-black);
   border-bottom: 3px solid var(--color-black);
   transform: translateX(-50%);
   transition: background-color 0.05s;
   z-index: 1;
+}
+
+.piano-key-black-active {
+  background: var(--piano-black-key-active);
 }
 
 /* Sample title - simple truncate */
@@ -801,5 +877,88 @@ body {
 
   .dos-list-scroll {
     max-height: 300px;
+  }
+}
+
+/* ==========================================
+   Dark Mode Overrides (파일 끝에 위치해야 함)
+   ========================================== */
+@media (prefers-color-scheme: dark) {
+  /* 리스트/입력 배경 */
+  .dos-list,
+  .inset,
+  .inset-deep,
+  .dos-progress-bar {
+    background: #262626;
+  }
+
+  /* 버튼 스타일 */
+  .dos-button {
+    color: #dcddde;
+    background: #2d2d2d;
+  }
+
+  .dos-button:hover:not(:disabled) {
+    background: #404040;
+  }
+
+  .dos-button:disabled {
+    color: #666666;
+  }
+
+  /* 슬라이더 트랙 */
+  .dos-slider-input::-webkit-slider-runnable-track {
+    background: #262626;
+  }
+  .dos-slider-input::-moz-range-track {
+    background: #262626;
+  }
+
+  /* 슬라이더 thumb */
+  .dos-slider-input::-webkit-slider-thumb {
+    background: #7f6df2;
+  }
+  .dos-slider-input::-moz-range-thumb {
+    background: #7f6df2;
+  }
+
+  /* 리셋 버튼 */
+  .dos-reset-button {
+    background: #2d2d2d;
+    color: #dcddde;
+  }
+  .dos-reset-button:hover {
+    background: #404040;
+  }
+
+  /* 상태바 테두리 */
+  .dos-status-bar {
+    border-top-color: #404040;
+    border-left-color: #404040;
+  }
+
+  /* 스크롤바 */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #262626;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #404040;
+    border: 1px solid #1e1e1e;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #505050;
+  }
+  ::-webkit-scrollbar-corner {
+    background: #262626;
+  }
+
+  /* Firefox 스크롤바 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #404040 #262626;
   }
 }

@@ -1054,11 +1054,11 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderTop: '2px solid black',
-              borderLeft: '2px solid black',
-              borderBottom: '2px solid white',
-              borderRight: '2px solid white',
-              backgroundColor: '#808080',
+              borderTop: '2px solid var(--border-dark)',
+              borderLeft: '2px solid var(--border-dark)',
+              borderBottom: '2px solid var(--border-highlight)',
+              borderRight: '2px solid var(--border-highlight)',
+              backgroundColor: 'var(--color-gray)',
               padding: '4px 8px',
               boxSizing: 'border-box',
             }}>
@@ -1125,11 +1125,11 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                 style={{
                   flex: 1,
                   height: '28px',
-                  borderTop: isDragging ? '2px solid var(--color-yellow)' : '2px solid white',
-                  borderLeft: isDragging ? '2px solid var(--color-yellow)' : '2px solid white',
-                  borderBottom: isDragging ? '2px solid var(--color-yellow)' : '2px solid black',
-                  borderRight: isDragging ? '2px solid var(--color-yellow)' : '2px solid black',
-                  backgroundColor: isDragging ? 'rgba(255, 255, 0, 0.1)' : '#C0C0C0',
+                  borderTop: isDragging ? '2px solid var(--color-yellow)' : '2px solid var(--border-highlight)',
+                  borderLeft: isDragging ? '2px solid var(--color-yellow)' : '2px solid var(--border-highlight)',
+                  borderBottom: isDragging ? '2px solid var(--color-yellow)' : '2px solid var(--border-dark)',
+                  borderRight: isDragging ? '2px solid var(--color-yellow)' : '2px solid var(--border-dark)',
+                  backgroundColor: isDragging ? 'var(--bg-select)' : 'var(--bg-main)',
                   padding: '2px 8px',
                   textAlign: 'center',
                   cursor: 'pointer',
@@ -1141,7 +1141,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                 }}
               >
                 <span style={{
-                  color: isDragging ? 'var(--color-yellow)' : 'black',
+                  color: isDragging ? 'var(--color-yellow)' : 'var(--text-main)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '2px',
@@ -1242,12 +1242,12 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderTop: repeatMode === 'all' ? '2px solid black' : '2px solid white',
-                    borderLeft: repeatMode === 'all' ? '2px solid black' : '2px solid white',
-                    borderBottom: repeatMode === 'all' ? '2px solid white' : '2px solid black',
-                    borderRight: repeatMode === 'all' ? '2px solid white' : '2px solid black',
-                    backgroundColor: repeatMode === 'all' ? '#00FF00' : '#C0C0C0',
-                    color: 'black'
+                    borderTop: repeatMode === 'all' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
+                    borderLeft: repeatMode === 'all' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
+                    borderBottom: repeatMode === 'all' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
+                    borderRight: repeatMode === 'all' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
+                    backgroundColor: repeatMode === 'all' ? 'var(--color-lime)' : 'var(--bg-main)',
+                    color: repeatMode === 'all' ? 'var(--color-black)' : 'var(--text-main)'
                   }}
                 >
                   <Repeat size={12} />
@@ -1263,12 +1263,12 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderTop: repeatMode === 'one' ? '2px solid black' : '2px solid white',
-                    borderLeft: repeatMode === 'one' ? '2px solid black' : '2px solid white',
-                    borderBottom: repeatMode === 'one' ? '2px solid white' : '2px solid black',
-                    borderRight: repeatMode === 'one' ? '2px solid white' : '2px solid black',
-                    backgroundColor: repeatMode === 'one' ? '#00FF00' : '#C0C0C0',
-                    color: 'black'
+                    borderTop: repeatMode === 'one' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
+                    borderLeft: repeatMode === 'one' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
+                    borderBottom: repeatMode === 'one' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
+                    borderRight: repeatMode === 'one' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
+                    backgroundColor: repeatMode === 'one' ? 'var(--color-lime)' : 'var(--bg-main)',
+                    color: repeatMode === 'one' ? 'var(--color-black)' : 'var(--text-main)'
                   }}
                 >
                   <Repeat1 size={12} />
@@ -1284,12 +1284,12 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderTop: repeatMode === 'shuffle' ? '2px solid black' : '2px solid white',
-                    borderLeft: repeatMode === 'shuffle' ? '2px solid black' : '2px solid white',
-                    borderBottom: repeatMode === 'shuffle' ? '2px solid white' : '2px solid black',
-                    borderRight: repeatMode === 'shuffle' ? '2px solid white' : '2px solid black',
-                    backgroundColor: repeatMode === 'shuffle' ? '#00FF00' : '#C0C0C0',
-                    color: 'black'
+                    borderTop: repeatMode === 'shuffle' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
+                    borderLeft: repeatMode === 'shuffle' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
+                    borderBottom: repeatMode === 'shuffle' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
+                    borderRight: repeatMode === 'shuffle' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
+                    backgroundColor: repeatMode === 'shuffle' ? 'var(--color-lime)' : 'var(--bg-main)',
+                    color: repeatMode === 'shuffle' ? 'var(--color-black)' : 'var(--text-main)'
                   }}
                 >
                   <Shuffle size={12} />
