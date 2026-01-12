@@ -754,7 +754,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
    */
   useEffect(() => {
     if (state && setMasterVolume) {
-      setMasterVolume(masterVolume / 100);
+      setMasterVolume(masterVolume);
     }
   }, [state, currentMusicFile, setMasterVolume, masterVolume]);
 
@@ -1398,13 +1398,13 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                 max={200}
                 onChange={(vol) => {
                   setMasterVolumeState(vol);
-                  setMasterVolume(vol / 100);
+                  setMasterVolume(vol);
                 }}
                 unit="%"
                 showReset={true}
                 onReset={() => {
                   setMasterVolumeState(100);
-                  setMasterVolume(1.0);
+                  setMasterVolume(100);
                 }}
               />
             </div>
