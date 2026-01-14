@@ -893,6 +893,11 @@ body {
     background: #1e1e2a;
   }
 
+  /* 프로그레스바 fill - 밝은 파란색으로 가시성 확보 */
+  .dos-progress-fill {
+    background: var(--color-blue);
+  }
+
   /* 버튼 스타일 */
   .dos-button {
     color: #f4f4f5;
