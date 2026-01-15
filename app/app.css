@@ -64,6 +64,9 @@
   /* Segment inactive background */
   --segment-inactive: rgba(0, 0, 0, 0.05);
 
+  /* Peak LED - 밝은 LED 색상 */
+  --meter-peak: #00FF00;
+
   /* Piano */
   --piano-white-key: #FFFFFF;
   --piano-white-key-active: #C0C0C0;
@@ -125,6 +128,9 @@
 
     /* Segment inactive background */
     --segment-inactive: rgba(255, 255, 255, 0.05);
+
+    /* Peak LED - 밝은 LED 색상 (라이트모드와 동일) */
+    --meter-peak: #00FF00;
 
     /* Piano */
     --piano-white-key: #52525b;

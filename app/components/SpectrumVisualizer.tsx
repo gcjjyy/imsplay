@@ -51,7 +51,8 @@ export default function SpectrumVisualizer({
     low: string;
     mid: string;
     high: string;
-  }>({ inactive: "#808080", low: "#707080", mid: "#505060", high: "#303040" });
+    peak: string;
+  }>({ inactive: "#808080", low: "#707080", mid: "#505060", high: "#303040", peak: "#00FF00" });
 
   // 색상 업데이트
   const updateColors = () => {
@@ -61,6 +62,7 @@ export default function SpectrumVisualizer({
       low: getCSSColor(containerRef.current, "--meter-low"),
       mid: getCSSColor(containerRef.current, "--meter-mid"),
       high: getCSSColor(containerRef.current, "--meter-high"),
+      peak: getCSSColor(containerRef.current, "--meter-peak"),
     };
   };
 
@@ -124,7 +126,10 @@ export default function SpectrumVisualizer({
 
         // 색상 결정
         let color = colors.inactive;
-        if (isActive || isPeak) {
+        if (isPeak) {
+          // 피크는 항상 밝은 LED 색상
+          color = colors.peak;
+        } else if (isActive) {
           const ratio = segIndex / segmentCount;
           if (ratio >= 0.8) {
             color = colors.high;
