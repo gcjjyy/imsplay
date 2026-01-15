@@ -254,6 +254,7 @@ export default function SpectrumVisualizer({
           display: "flex",
           gap: "2px",
           height: "100%",
+          paddingBottom: "6px",
         }}
       >
         {Array.from({ length: barCount }).map((_, index) => (
