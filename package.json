@@ -1,6 +1,6 @@
 {
   "name": "imsplay",
-  "version": "1.64",
+  "version": "2.0",
   "private": true,
   "type": "module",
   "scripts": {

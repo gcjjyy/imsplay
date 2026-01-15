@@ -6,8 +6,8 @@ import { Iconv } from "iconv";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "ADLIB MUSIC PLAYER - IMS & ROL PLAYER" },
-    { name: "description", content: "브라우저에서 OPL2 FM 신디사이저로 AdLib IMS과 ROL 음악 파일을 재생하세요" },
+    { title: "IMS Player - AdLib Music Player" },
+    { name: "description", content: "브라우저에서 OPL2 FM 신디사이저로 AdLib 음악 파일을 재생하세요" },
   ];
 }
 

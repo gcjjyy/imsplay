@@ -6,34 +6,31 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useFetcher } from "react-router";
-import { useROLPlayer } from "~/lib/hooks/useROLPlayer";
-import { useIMSPlayer } from "~/lib/hooks/useIMSPlayer";
-import { useVGMPlayer } from "~/lib/hooks/useVGMPlayer";
-import { isYM3812VGM } from "~/lib/vgm/vgm-parser";
+import { useAdPlugPlayer } from "~/lib/hooks/useAdPlugPlayer";
+import { ADPLUG_EXTENSIONS } from "~/lib/adplug/adplug";
 // ═══════════════════════════════════════════════════════════════
 // [MEDIA SESSION API - 비활성화됨]
 // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
 // ═══════════════════════════════════════════════════════════════
 // import { generateSilentAudioDataURL } from "~/lib/utils/silent-audio";
 // ═══════════════════════════════════════════════════════════════
-import ChannelVisualizer from "./ChannelVisualizer";
+import SpectrumVisualizer from "./SpectrumVisualizer";
 import DosPanel from "~/components/dos-ui/DosPanel";
 import DosButton from "~/components/dos-ui/DosButton";
 import DosList from "~/components/dos-ui/DosList";
 import DosSlider from "~/components/dos-ui/DosSlider";
-import PianoRoll from "./PianoRoll";
 import LyricsDisplay from "./LyricsDisplay";
 import type { ISSData } from "~/routes/api/parse-iss";
-import { Repeat1, Repeat, Play, Square, SkipBack, SkipForward, Shuffle } from "lucide-react";
+import { Repeat1, Repeat, Play, Square, SkipBack, SkipForward, Shuffle, HelpCircle, X } from "lucide-react";
 import { version } from "../../package.json";
 
-type MusicFormat = "ROL" | "IMS" | "VGM" | null;
+type MusicFormat = string | null;
 type RepeatMode = 'all' | 'one' | 'shuffle';
 
 // 샘플 음악 목록
 export interface MusicSample {
   musicFile: string;
-  format: "ROL" | "IMS" | "VGM";
+  format: string;
   title?: string;
 }
 
@@ -122,6 +119,8 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/04 Tropical Ghost Oasis.vgm", format: "VGM" },
   { musicFile: "/05 Welcome to a Kick In Yore Pants In Good Ole Hillville!.vgm", format: "VGM" },
   { musicFile: "/18 Tyrian, The Level.vgm", format: "VGM" },
+  // S3M 샘플 (AdLib 기반)
+  { musicFile: "/adlibsp.s3m", format: "S3M" },
 ];
 
 const BNK_FILE = "/STANDARD.BNK";
@@ -203,7 +202,7 @@ async function findUserBnkFile(
   musicFile: File,
   userBnkMap: Map<string, File>
 ): Promise<File> {
-  const baseName = musicFile.name.replace(/\.(ims|rol)$/i, '').toLowerCase();
+  const baseName = musicFile.name.replace(/\.[^.]+$/, '').toLowerCase();
 
   // 1순위: 동일 이름 BNK (사용자 폴더)
   const matchingBnk = userBnkMap.get(`${baseName}.bnk`);
@@ -263,6 +262,9 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   // 드래그 앤 드롭 상태
   const [isDragging, setIsDragging] = useState(false);
 
+  // 지원 포맷 다이얼로그 상태
+  const [isFormatDialogOpen, setIsFormatDialogOpen] = useState(false);
+
   // 트랙 종료 콜백 ref (정의 순서 문제 해결)
   const playNextTrackRef = useRef<(() => void) | null>(null);
 
@@ -286,9 +288,9 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const format: MusicFormat = useMemo(() => {
     if (!currentMusicFile) return null;
     const ext = currentMusicFile.name.toLowerCase().split(".").pop();
-    if (ext === "rol") return "ROL";
-    if (ext === "ims") return "IMS";
-    if (ext === "vgm" || ext === "vgz") return "VGM";
+    if (!ext) return null;
+    // AdPlug 지원 포맷인지 체크
+    if (ADPLUG_EXTENSIONS.includes(`.${ext}`)) return ext.toUpperCase();
     return null;
   }, [currentMusicFile]);
 
@@ -297,9 +299,9 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     playNextTrackRef.current?.();
   }, []);
 
-  // ROL 플레이어
-  const rolPlayer = useROLPlayer({
-    rolFile: format === "ROL" ? currentMusicFile : null,
+  // AdPlug 통합 플레이어 (IMS, ROL, VGM 및 모든 AdPlug 지원 포맷)
+  const player = useAdPlugPlayer({
+    musicFile: currentMusicFile,
     bnkFile: currentBnkFile,
     fileLoadKey,
     forceReloadRef,
@@ -308,47 +310,13 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     audioElementRef,
   });
 
-  // IMS 플레이어
-  const imsPlayer = useIMSPlayer({
-    imsFile: format === "IMS" ? currentMusicFile : null,
-    bnkFile: currentBnkFile,
-    fileLoadKey,
-    forceReloadRef,
-    onTrackEnd: handleTrackEnd,
-    sharedAudioContextRef,
-    audioElementRef,
-  });
+  const { state, error, isPlayerReady, analyserNode, play, pause, stop, setMasterVolume, checkPlayerReady } = player;
 
-  // VGM 플레이어
-  const vgmPlayer = useVGMPlayer({
-    vgmFile: format === "VGM" ? currentMusicFile : null,
-    fileLoadKey,
-    forceReloadRef,
-    onTrackEnd: handleTrackEnd,
-    sharedAudioContextRef,
-    audioElementRef,
-  });
-
-  // 현재 활성 플레이어 선택
-  const player = format === "ROL" ? rolPlayer : format === "VGM" ? vgmPlayer : imsPlayer;
-  const { state, error, isPlayerReady, play, pause, stop, setVolume, setTempo, setMasterVolume, checkPlayerReady } = player;
-
-  // Format-aware ready state (IMS↔ROL↔VGM 전환 시 auto-play가 올바르게 작동하도록)
+  // Format-aware ready state (단일 플레이어 사용으로 간소화)
   const isCurrentPlayerReady = useMemo(() => {
     if (!format || !currentMusicFile) return false;
-
-    const ext = currentMusicFile.name.toLowerCase().split('.').pop();
-    let expectedFormat: MusicFormat = null;
-    if (ext === 'rol') expectedFormat = 'ROL';
-    else if (ext === 'ims') expectedFormat = 'IMS';
-    else if (ext === 'vgm' || ext === 'vgz') expectedFormat = 'VGM';
-
-    if (format !== expectedFormat) return false;
-
-    if (format === 'ROL') return rolPlayer.isPlayerReady;
-    if (format === 'VGM') return vgmPlayer.isPlayerReady;
-    return imsPlayer.isPlayerReady;
-  }, [format, currentMusicFile, rolPlayer.isPlayerReady, imsPlayer.isPlayerReady, vgmPlayer.isPlayerReady]);
+    return isPlayerReady && state?.fileName === currentMusicFile.name;
+  }, [format, currentMusicFile, isPlayerReady, state?.fileName]);
 
   // 음악 리스트 결정 (사용자 폴더 or 샘플)
   const isUserFolder = userFolderName && userMusicFiles.length > 0;
@@ -426,26 +394,16 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     setLoadedFileCount(0); // 로딩 카운트 초기화
 
     try {
+      // AdPlug 지원 확장자 패턴 생성
+      const adplugExtPattern = new RegExp(
+        `\\.(${ADPLUG_EXTENSIONS.map(e => e.slice(1)).join('|')})$`,
+        'i'
+      );
+
       // 파일 분류 (대소문자 구별 없이)
-      const imsRolFiles = files.filter(f => /\.(ims|rol)$/i.test(f.name));
-      const vgmFiles = files.filter(f => /\.(vgm|vgz)$/i.test(f.name));
+      const musicFiles = files.filter(f => adplugExtPattern.test(f.name));
       const bnkFiles = files.filter(f => /\.bnk$/i.test(f.name));
       const issFiles = files.filter(f => /\.iss$/i.test(f.name));
-
-      // VGM 파일 중 YM3812 칩을 사용하는 파일만 필터링
-      const validVgmFiles: File[] = [];
-      for (const vgmFile of vgmFiles) {
-        try {
-          const buffer = await vgmFile.arrayBuffer();
-          if (isYM3812VGM(buffer)) {
-            validVgmFiles.push(vgmFile);
-          }
-        } catch {
-          // 파일 읽기 실패 시 무시
-        }
-      }
-
-      const musicFiles = [...imsRolFiles, ...validVgmFiles];
 
       // BNK 파일을 Map으로 변환 (파일명 소문자 → File 객체)
       const bnkMap = new Map(bnkFiles.map(f => [f.name.toLowerCase(), f]));
@@ -463,20 +421,22 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       let processedCount = 0;
       const BATCH_SIZE = 10;
 
-      // 모든 음악 파일을 배치로 처리 (ROL + IMS 함께)
+      // 모든 음악 파일을 배치로 처리
       for (let i = 0; i < musicFiles.length; i += BATCH_SIZE) {
         const batch = musicFiles.slice(i, i + BATCH_SIZE);
 
-        // 배치에서 IMS와 ROL 분리
+        // 배치에서 IMS 파일 분리 (한글 제목 추출을 위해 API 호출 필요)
         const batchImsFiles = batch.filter(f => /\.ims$/i.test(f.name));
-        const batchRolFiles = batch.filter(f => /\.rol$/i.test(f.name));
+        const batchOtherFiles = batch.filter(f => !/\.ims$/i.test(f.name));
 
-        // ROL 파일은 즉시 처리
-        batchRolFiles.forEach(file => {
-          titlesMap.set(file.name, file.name.replace(/\.rol$/i, ''));
+        // IMS 외 파일은 확장자를 제거한 파일명을 제목으로 사용
+        batchOtherFiles.forEach(file => {
+          const ext = file.name.lastIndexOf('.');
+          const title = ext > 0 ? file.name.substring(0, ext) : file.name;
+          titlesMap.set(file.name, title);
         });
 
-        // IMS 파일이 있으면 API 호출
+        // IMS 파일이 있으면 API 호출 (한글 제목 추출)
         if (batchImsFiles.length > 0) {
           const formData = new FormData();
           batchImsFiles.forEach((file, index) => {
@@ -768,15 +728,8 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     if (!currentMusicFile || !format) return;
 
     const shouldLoop = repeatMode === 'one';
-
-    if (format === 'IMS') {
-      imsPlayer.setLoopEnabled(shouldLoop);
-    } else if (format === 'ROL') {
-      rolPlayer.setLoopEnabled(shouldLoop);
-    } else if (format === 'VGM') {
-      vgmPlayer.setLoopEnabled(shouldLoop);
-    }
-  }, [repeatMode, format, currentMusicFile]);
+    player.setLoopEnabled(shouldLoop);
+  }, [repeatMode, format, currentMusicFile, player]);
 
   /**
    * 셔플 히스토리 초기화 (첫 재생 시 현재 곡 추가)
@@ -918,10 +871,10 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     // 메타데이터 업데이트
     if (currentMusicFile) {
       const title = isUserFolder
-        ? userMusicFileTitles.get(currentMusicFile.name) || currentMusicFile.name.replace(/\.(ims|rol|vgm|vgz)$/i, '')
-        : musicSamples[playingTrackIndex]?.title || currentMusicFile.name.replace(/\.(ims|rol|vgm|vgz)$/i, '');
+        ? userMusicFileTitles.get(currentMusicFile.name) || currentMusicFile.name.replace(/\.[^.]+$/, '')
+        : musicSamples[playingTrackIndex]?.title || currentMusicFile.name.replace(/\.[^.]+$/, '');
 
-      const artist = format === "IMS" ? "IMS Music" : format === "VGM" ? "VGM Music" : "AdLib ROL Music";
+      const artist = format ? `${format} Music` : "AdLib Music";
       const album = isUserFolder ? userFolderName : "Sample Music";
 
       navigator.mediaSession.metadata = new MediaMetadata({
@@ -931,29 +884,37 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       });
     }
 
+    // 재생 위치 정보 업데이트
+    if (state && state.totalSize > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: state.totalSize / 1000, // ms -> seconds
+          position: state.currentByte / 1000, // ms -> seconds
+          playbackRate: 1.0,
+        });
+      } catch (e) {
+        // setPositionState not supported in some browsers
+      }
+    }
+
     // 액션 핸들러 설정
     navigator.mediaSession.setActionHandler("play", () => {
-      console.log('[Media Session] Play');
       if (play) play();
     });
 
     navigator.mediaSession.setActionHandler("pause", () => {
-      console.log('[Media Session] Pause');
       if (pause) pause();
     });
 
     navigator.mediaSession.setActionHandler("previoustrack", () => {
-      console.log('[Media Session] Previous Track');
       playPreviousTrack();
     });
 
     navigator.mediaSession.setActionHandler("nexttrack", () => {
-      console.log('[Media Session] Next Track');
       playNextTrack();
     });
 
     navigator.mediaSession.setActionHandler("stop", () => {
-      console.log('[Media Session] Stop');
       if (stop) stop();
     });
 
@@ -967,10 +928,21 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         navigator.mediaSession.setActionHandler("stop", null);
       }
     };
-  }, [state?.isPlaying, state?.isPaused, currentMusicFile, play, pause, stop, playPreviousTrack, playNextTrack, isUserFolder, userMusicFileTitles, musicSamples, playingTrackIndex, format, userFolderName]);
+  }, [state?.isPlaying, state?.isPaused, state?.currentByte, state?.totalSize, currentMusicFile, play, pause, stop, playPreviousTrack, playNextTrack, isUserFolder, userMusicFileTitles, musicSamples, playingTrackIndex, format, userFolderName]);
 
   // progress bar
   const progress = state ? (state.currentByte / state.totalSize) * 100 : 0;
+
+  // 밀리초를 MM:SS 형식으로 변환
+  const formatTime = (ms: number): string => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // 포맷 뱃지 스타일 (모든 포맷 통일)
+  const getFormatBadgeClass = () => 'dos-badge-ims';
 
   // 음악 리스트 아이템 생성
   const listItems = useMemo(() => {
@@ -978,14 +950,14 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       // 사용자 폴더 모드
       return userMusicFiles.map((file, index) => {
         const ext = file.name.toLowerCase().split('.').pop();
-        const format = ext === 'rol' ? 'ROL' : (ext === 'vgm' || ext === 'vgz') ? 'VGM' : 'IMS';
-        const title = userMusicFileTitles.get(file.name) || file.name.replace(/\.(ims|rol|vgm|vgz)$/i, '');
+        const format = ext?.toUpperCase() || 'OPL';
+        const title = userMusicFileTitles.get(file.name) || file.name.substring(0, file.name.lastIndexOf('.'));
 
         return {
           key: `${index}-${file.name}`,
           content: (
             <div className="flex gap-8 align-center w-full" style={{ overflow: 'hidden' }}>
-              <span className={`dos-badge ${format === 'ROL' ? 'dos-badge-rol' : format === 'VGM' ? 'dos-badge-vgm' : 'dos-badge-ims'}`} style={{ flexShrink: 0 }}>
+              <span className={`dos-badge ${getFormatBadgeClass()}`} style={{ flexShrink: 0 }}>
                 {format}
               </span>
               <span className="sample-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
@@ -999,7 +971,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         key: sample.musicFile,
         content: (
           <div className="flex gap-8 align-center w-full" style={{ overflow: 'hidden' }}>
-            <span className={`dos-badge ${sample.format === 'ROL' ? 'dos-badge-rol' : sample.format === 'VGM' ? 'dos-badge-vgm' : 'dos-badge-ims'}`} style={{ flexShrink: 0 }}>
+            <span className={`dos-badge ${getFormatBadgeClass()}`} style={{ flexShrink: 0 }}>
               {sample.format}
             </span>
             <span className="sample-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sample.title || sample.musicFile.slice(1)}</span>
@@ -1029,7 +1001,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     if (isUserFolder) {
       const file = userMusicFiles[playingTrackIndex];
       if (!file) return '?';
-      return userMusicFileTitles.get(file.name) || file.name.replace(/\.(ims|rol)$/i, '');
+      return userMusicFileTitles.get(file.name) || file.name.replace(/\.[^.]+$/, '');
     } else {
       return musicSamples[playingTrackIndex]?.title || currentMusicFile?.name || '?';
     }
@@ -1137,18 +1109,141 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         </div>
       )}
 
+      {/* 지원 포맷 다이얼로그 */}
+      {isFormatDialogOpen && (
+        <>
+          {/* 전체 화면 dimming */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              zIndex: 9998,
+            }}
+            onClick={() => setIsFormatDialogOpen(false)}
+          />
+          {/* 다이얼로그 (앱 컨테이너 기준 중앙) */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+              pointerEvents: 'none',
+            }}
+          >
+            <div onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ pointerEvents: 'auto' }}>
+          <DosPanel
+            title={
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <span>지원 포맷</span>
+                <button
+                  onClick={() => setIsFormatDialogOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-main)',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </span>
+            }
+            style={{
+              width: '580px',
+              maxWidth: '90vw',
+              maxHeight: '60vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
+            }}
+          >
+            {/* 포맷 목록 - 스크롤 영역 */}
+            <div className="dos-list" style={{ flex: 1, minHeight: 0 }}>
+              <div className="dos-list-scroll" style={{ lineHeight: '1.6', padding: '8px' }}>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>A2M</span> - subz3ro의 AdLib Tracker 2 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>ADL</span> - Westwood ADL 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>AGD</span> - Remi Herbulot의 Herbulot AdLib Gold System (HERAD)</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>AMD</span> - Elyssis의 AMUSIC Adlib Tracker 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>BAM</span> - Bob's Adlib Music 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>BMF</span> - The Brain의 Easy AdLib 1.0 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>CFF</span> - CUD의 BoomTracker 4.0 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>CMF</span> - Creative Technology의 Creative Music 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>D00</span> - Vibrants의 EdLib 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>DFM</span> - R.Verhaag의 Digital-FM 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>DMO</span> - TwinTeam의 Twin TrackPlayer 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>DRO</span> - DOSBox Raw OPL 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>DTM</span> - DeFy의 DeFy Adlib Tracker 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>GOT</span> - Adept Software Roy Davis의 God Of Thunder Music 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>HA2</span> - Remi Herbulot의 Herbulot AdLib System v2 (HERAD)</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>HSC</span> - Hannes Seifert의 HSC Adlib Composer / Electronic Rats의 HSC-Tracker</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>HSP</span> - Number Six / Aegis Corp.의 HSC Packed 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>HSQ</span> - Remi Herbulot의 Herbulot AdLib System (HERAD)</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>IMF</span> - Apogee IMF 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>IMS</span> - IMPlay Song 포맷 (한국 도스 음악)</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>JBM</span> - JBM Adlib Music 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>KSM</span> - Ken Silverman의 Music 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>LAA</span> - LucasArts의 AdLib Audio 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>LDS</span> - LOUDNESS Sound System 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>M</span> - Origin AdLib Music 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>MAD</span> - Mlat Adlib Tracker 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>MDI</span> - Ad Lib Inc.의 AdLib MIDIPlay 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>MID</span> - MIDI 오디오 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>MKJ</span> - M \ K Productions의 MKJamz 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>MSC</span> - AdLib MSCplay 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>MTK</span> - SuBZeR0의 MPU-401 Trakker 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>MUS</span> - Ad Lib Inc.의 AdLib MIDI Music 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>PLX</span> - PALLADIX Sound System 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>RAD</span> - Reality의 Reality ADlib Tracker 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>RAW</span> - RDOS의 RdosPlay RAW 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>RIX</span> - Softstar RIX OPL Music 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>ROL</span> - AdLib Inc.의 AdLib Visual Composer 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>S3M</span> - Future Crew의 Screamtracker 3 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>SA2</span> - Surprise! Productions의 Surprise! Adlib Tracker 2 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>SAT</span> - Surprise! Productions의 Surprise! Adlib Tracker 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>SCI</span> - Sierra의 AdLib Audio 파일 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>SDB</span> - Remi Herbulot의 Herbulot AdLib System (HERAD)</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>SNG</span> - SNGPlay / Faust Music Creator / Adlib Tracker 1.0 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>SOP</span> - 이호범(sopepos)의 Note Sequencer 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>SQX</span> - Remi Herbulot의 Herbulot AdLib System (HERAD)</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>VGM</span> - Valley Bell의 Video Game Music 1.51 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>XAD</span> - Riven the Mage의 eXotic ADlib 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>XMS</span> - MaDoKaN/E.S.G의 XMS-Tracker 포맷</div>
+                <div><span style={{ color: '#2563eb', fontWeight: 'bold' }}>XSM</span> - Davey W Taylor의 eXtra Simple Music 포맷</div>
+              </div>
+            </div>
+
+            {/* 하단 여백 */}
+            <div style={{ marginTop: '8px' }} />
+          </DosPanel>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* 타이틀 바 */}
       <div className="dos-title-bar">
         <a href="https://cafe.naver.com/olddos" target="_blank" rel="noopener noreferrer" className="dos-link">
           도스박물관
         </a>
-        {" "}IMS/ROL 웹플레이어 v{version}
+        {" "}IMS Player v{version}
       </div>
 
       {/* 메인 그리드 */}
-      <div className="dos-grid dos-grid-2col">
+      <div className="dos-grid dos-grid-2col" style={{ flex: 1, minHeight: 0 }}>
         {/* 좌측: 파일 선택 및 컨트롤 */}
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {/* 폴더 선택 및 재생 컨트롤 */}
           <DosPanel>
             <input
@@ -1293,8 +1388,8 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                     borderLeft: repeatMode === 'all' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
                     borderBottom: repeatMode === 'all' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
                     borderRight: repeatMode === 'all' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
-                    backgroundColor: repeatMode === 'all' ? 'var(--color-lime)' : 'var(--bg-main)',
-                    color: repeatMode === 'all' ? 'var(--color-black)' : 'var(--text-main)'
+                    backgroundColor: repeatMode === 'all' ? 'var(--toggle-active-bg)' : 'var(--bg-main)',
+                    color: repeatMode === 'all' ? 'var(--toggle-active-text)' : 'var(--text-main)'
                   }}
                 >
                   <Repeat size={12} />
@@ -1314,8 +1409,8 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                     borderLeft: repeatMode === 'one' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
                     borderBottom: repeatMode === 'one' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
                     borderRight: repeatMode === 'one' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
-                    backgroundColor: repeatMode === 'one' ? 'var(--color-lime)' : 'var(--bg-main)',
-                    color: repeatMode === 'one' ? 'var(--color-black)' : 'var(--text-main)'
+                    backgroundColor: repeatMode === 'one' ? 'var(--toggle-active-bg)' : 'var(--bg-main)',
+                    color: repeatMode === 'one' ? 'var(--toggle-active-text)' : 'var(--text-main)'
                   }}
                 >
                   <Repeat1 size={12} />
@@ -1335,8 +1430,8 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                     borderLeft: repeatMode === 'shuffle' ? '2px solid var(--border-dark)' : '2px solid var(--border-highlight)',
                     borderBottom: repeatMode === 'shuffle' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
                     borderRight: repeatMode === 'shuffle' ? '2px solid var(--border-highlight)' : '2px solid var(--border-dark)',
-                    backgroundColor: repeatMode === 'shuffle' ? 'var(--color-lime)' : 'var(--bg-main)',
-                    color: repeatMode === 'shuffle' ? 'var(--color-black)' : 'var(--text-main)'
+                    backgroundColor: repeatMode === 'shuffle' ? 'var(--toggle-active-bg)' : 'var(--bg-main)',
+                    color: repeatMode === 'shuffle' ? 'var(--toggle-active-text)' : 'var(--text-main)'
                   }}
                 >
                   <Shuffle size={12} />
@@ -1345,69 +1440,28 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
             </div>
           </DosPanel>
 
-          {/* 음악 리스트 */}
-          <DosPanel title={folderTitle} className="flex-1">
-            <DosList
-              items={listItems}
-              selectedKey={selectedKey}
-              scrollToIndex={playingTrackIndex}
-              autoScroll={shouldAutoScroll}
-              onSelect={handleListSelect}
-            />
-          </DosPanel>
+          {/* 스펙트럼 시각화 */}
+          <SpectrumVisualizer analyserNode={analyserNode} />
 
-          {/* 재생 설정 */}
-          <DosPanel style={{ height: '140px', flexShrink: 0 }}>
-            {/* 진행률 */}
-            <div className="mb-16">
-              <div className="dos-progress-bar">
-                <div className="dos-progress-fill" style={{ width: `${progress}%` }} />
-                <div className="dos-progress-text">
-                  BPM: {state?.currentTempo ? Math.floor(state.currentTempo) : '--'}
-                </div>
+          {/* 재생 진행률 및 볼륨 */}
+          <DosPanel style={{ flexShrink: 0 }}>
+            <div className="dos-progress-bar" style={{ marginBottom: '8px' }}>
+              <div className="dos-progress-fill" style={{ width: `${progress}%` }} />
+              <div className="dos-progress-text">
+                {state ? `${formatTime(state.currentByte)} / ${formatTime(state.totalSize)}` : '--:-- / --:--'}
               </div>
             </div>
-
-            {/* 볼륨, 템포, 마스터볼륨 */}
-            <div>
-              <DosSlider
-                label="OPL 볼륨"
-                value={state?.volume ?? 100}
-                min={0}
-                max={127}
-                onChange={setVolume}
-                showReset={true}
-                onReset={() => setVolume(100)}
-                disabled={format === "VGM"}
-              />
-              <DosSlider
-                label="템포"
-                value={state?.tempo ?? 100}
-                min={25}
-                max={400}
-                onChange={setTempo}
-                unit="%"
-                showReset={true}
-                onReset={() => setTempo(100)}
-                disabled={format === "VGM"}
-              />
-              <DosSlider
-                label="마스터 볼륨"
-                value={masterVolume}
-                min={0}
-                max={200}
-                onChange={(vol) => {
-                  setMasterVolumeState(vol);
-                  setMasterVolume(vol);
-                }}
-                unit="%"
-                showReset={true}
-                onReset={() => {
-                  setMasterVolumeState(100);
-                  setMasterVolume(100);
-                }}
-              />
-            </div>
+            <DosSlider
+              label="볼륨"
+              value={masterVolume}
+              min={0}
+              max={200}
+              onChange={(vol) => {
+                setMasterVolumeState(vol);
+                setMasterVolume(vol);
+              }}
+              unit="%"
+            />
           </DosPanel>
 
           {/* 에러 메시지 */}
@@ -1424,33 +1478,57 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
           )}
         </div>
 
-        {/* 우측: 채널 시각화 */}
-        <div>
-          <ChannelVisualizer
-            channelVolumes={state?.currentVolumes ?? Array(11).fill(0)}
-            instrumentNames={state?.instrumentNames}
-          />
-
-          {/* 가사 / 크레딧 */}
-          <DosPanel className="dos-panel-credits" style={{ height: '140px', flexShrink: 0 }}>
-            <LyricsDisplay
-              issData={currentIssData}
-              currentTick={state?.currentTick ?? 0}
-              isPlaying={state?.isPlaying ?? false}
+        {/* 우측: 음악 리스트 */}
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <DosPanel title={
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span>{folderTitle}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsFormatDialogOpen(true);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-cyan)',
+                  cursor: 'pointer',
+                  padding: '0 4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title="지원 포맷 보기"
+              >
+                <HelpCircle size={14} />
+              </button>
+            </span>
+          } className="flex-1">
+            <DosList
+              items={listItems}
+              selectedKey={selectedKey}
+              scrollToIndex={playingTrackIndex}
+              autoScroll={shouldAutoScroll}
+              onSelect={handleListSelect}
             />
           </DosPanel>
         </div>
       </div>
 
-      {/* 피아노 건반 시각화 */}
-      <PianoRoll activeNotes={state?.activeNotes} />
+      {/* 가사 / 크레딧 */}
+      <DosPanel className="dos-panel-credits" style={{ height: '140px' }}>
+        <LyricsDisplay
+          issData={currentIssData}
+          currentTick={state?.currentTick ?? 0}
+          isPlaying={state?.isPlaying ?? false}
+        />
+      </DosPanel>
 
       {/* 스테이터스 바 */}
       <div className="dos-status-bar">
         <div className="dos-status-item">
           {state ? (
             state.isPlaying
-              ? format === "VGM"
+              ? format === "VGM" || format === "VGZ"
                 ? `재생중 - ${currentMusicFile?.name || '?'}`
                 : `재생중 - ${currentTrackTitle} (${currentMusicFile?.name || '?'}${currentBnkFile?.name ? ', ' + currentBnkFile.name : ''})`
               : state.isPaused

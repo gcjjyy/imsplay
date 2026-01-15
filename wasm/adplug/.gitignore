@@ -1,0 +1,14 @@
+# AdPlug 원본 소스 (외부 의존성 - 별도 clone 필요)
+src/
+libbinio/
+
+# Build artifacts
+build/
+dist/
+*.o
+
+# Test outputs
+*.wav
+
+# OS files
+.DS_Store

@@ -52,10 +52,17 @@
   --bg-select: #000080;
   --text-select: #FFFFFF;
 
-  /* Meters */
-  --meter-low: #00FF00;
-  --meter-mid: #FFFF00;
-  --meter-high: #FFBB99;
+  /* Toggle button active */
+  --toggle-active-bg: var(--color-lime);
+  --toggle-active-text: var(--color-black);
+
+  /* Meters - 밝은 회색 배경에 어울리는 진한 색상 */
+  --meter-low: #707080;
+  --meter-mid: #505060;
+  --meter-high: #303040;
+
+  /* Segment inactive background */
+  --segment-inactive: rgba(0, 0, 0, 0.05);
 
   /* Piano */
   --piano-white-key: #FFFFFF;
@@ -107,10 +114,17 @@
     --bg-select: #2d2d3a;
     --text-select: #f4f4f5;
 
-    /* Meters */
-    --meter-low: #3ddc97;
-    --meter-mid: #fbbf24;
-    --meter-high: #f87171;
+    /* Toggle button active */
+    --toggle-active-bg: rgba(255, 255, 255, 0.20);
+    --toggle-active-text: #f4f4f5;
+
+    /* Meters - 다크블루그레이 배경에 어울리는 블루그레이 계열 */
+    --meter-low: #4a5568;
+    --meter-mid: #6b7a8f;
+    --meter-high: #8fa0b8;
+
+    /* Segment inactive background */
+    --segment-inactive: rgba(255, 255, 255, 0.05);
 
     /* Piano */
     --piano-white-key: #52525b;
@@ -184,6 +198,7 @@ body {
 
 /* Container - 800x600 resolution */
 .dos-container {
+  position: relative;
   max-width: 800px;
   width: 100%;
   height: 600px;
@@ -344,11 +359,13 @@ body {
 }
 
 .dos-list-item {
-  padding: 2px 4px;
+  padding: 0 4px;
   cursor: pointer;
   color: var(--text-main);
   font-size: 16px;
   font-weight: normal;
+  display: flex;
+  align-items: center;
 }
 
 .dos-list-item:hover {
@@ -362,8 +379,11 @@ body {
 
 /* Badge */
 .dos-badge {
-  display: inline-block;
-  padding: 1px 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 3px;
   font-weight: normal;
   text-transform: uppercase;
   font-size: 16px;
@@ -395,10 +415,11 @@ body {
   align-items: center;
   gap: 6px;
   margin: 4px 0;
+  padding-left: 2px;
 }
 
 .dos-slider-label {
-  min-width: 88px;
+  min-width: 45px;
   font-weight: normal;
   color: var(--text-main);
   font-size: 16px;
@@ -676,7 +697,7 @@ body {
 /* Grid */
 .dos-grid {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   overflow: hidden;
 }
@@ -787,65 +808,6 @@ body {
   text-decoration: underline;
 }
 
-/* Piano Roll */
-.piano-roll {
-  position: relative;
-  width: 100%;
-  height: 42px;
-  background: var(--color-black);
-  border: 1px solid var(--color-black);
-  overflow: hidden;
-  margin-bottom: 3px;
-}
-
-.piano-keys {
-  display: flex;
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.piano-key-white {
-  flex: 1;
-  height: 100%;
-  background: var(--piano-white-key);
-  border-right: 1px solid var(--piano-white-key-border);
-  border-bottom: 1px solid var(--piano-white-key-border);
-  transition: background-color 0.05s;
-  box-sizing: border-box;
-}
-
-.piano-key-white-active {
-  background: var(--piano-white-key-active);
-}
-
-.piano-keys-black {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 60%;
-  pointer-events: none;
-}
-
-.piano-key-black {
-  position: absolute;
-  width: 1.2%;
-  height: 100%;
-  background: var(--piano-black-key);
-  border-top: 1px solid var(--piano-black-key-border);
-  border-left: 1px solid var(--piano-black-key-border);
-  border-right: 1px solid var(--color-black);
-  border-bottom: 3px solid var(--color-black);
-  transform: translateX(-50%);
-  transition: background-color 0.05s;
-  z-index: 1;
-}
-
-.piano-key-black-active {
-  background: var(--piano-black-key-active);
-}
-
 /* Sample title - simple truncate */
 .sample-title {
   flex: 1;
@@ -893,9 +855,9 @@ body {
     background: #1e1e2a;
   }
 
-  /* 프로그레스바 fill - 밝은 파란색으로 가시성 확보 */
+  /* 프로그레스바 fill - 어두운 블루그레이 */
   .dos-progress-fill {
-    background: #93c5fd;
+    background: #4a5568;
   }
 
   /* 버튼 스타일 */
@@ -920,12 +882,12 @@ body {
     background: #1e1e2a;
   }
 
-  /* 슬라이더 thumb */
+  /* 슬라이더 thumb - 어두운 블루그레이 */
   .dos-slider-input::-webkit-slider-thumb {
-    background: #a78bfa;
+    background: #4a5568;
   }
   .dos-slider-input::-moz-range-thumb {
-    background: #a78bfa;
+    background: #4a5568;
   }
 
   /* 리셋 버튼 */
@@ -943,18 +905,12 @@ body {
     border-left-color: #3f3f50;
   }
 
-  /* 뱃지 색상 */
-  .dos-badge-ims {
-    background: #38bdf8;
-    color: #0d0d12;
-  }
-  .dos-badge-rol {
-    background: #3ddc97;
-    color: #0d0d12;
-  }
+  /* 뱃지 색상 - 어두운 블루그레이 */
+  .dos-badge-ims,
+  .dos-badge-rol,
   .dos-badge-vgm {
-    background: #a78bfa;
-    color: #0d0d12;
+    background: #4a5568;
+    color: #f4f4f5;
   }
 
   /* 스크롤바 */
