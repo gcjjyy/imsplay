@@ -2,7 +2,7 @@
  * SpectrumVisualizer.tsx - 실시간 주파수 스펙트럼 시각화 컴포넌트
  *
  * Web Audio API AnalyserNode를 사용하여 FFT 데이터를 DOS 스타일 LED 바로 시각화
- * Canvas 기반으로 구현하여 성능 최적화
+ * 각 바는 CSS inset div + Canvas 세그먼트로 구성
  * Peak hold 기능: 피크 블럭이 상단에 잠시 유지된 후 천천히 떨어짐
  */
 
@@ -11,24 +11,23 @@ import DosPanel from "~/components/dos-ui/DosPanel";
 
 interface SpectrumVisualizerProps {
   analyserNode: AnalyserNode | null;
-  barCount?: number; // 표시할 바 개수 (기본값: 16)
-  segmentCount?: number; // 세그먼트 개수 (기본값: 40)
+  barCount?: number;
+  segmentCount?: number;
 }
 
 interface BarData {
   value: number;
   peak: number;
   peakHoldTime: number;
-  peakFallSpeed: number; // ease-in을 위한 가속도
+  peakFallSpeed: number;
 }
 
 const TARGET_FPS = 30;
 const FRAME_INTERVAL = 1000 / TARGET_FPS;
 const PEAK_HOLD_FRAMES = 15;
-const PEAK_FALL_ACCELERATION = 0.3; // 프레임당 가속도
+const PEAK_FALL_ACCELERATION = 0.3;
 const VALUE_FALL_SPEED = 4;
 
-// CSS 변수에서 색상 값 읽기
 function getCSSColor(element: HTMLElement, varName: string): string {
   const style = getComputedStyle(element);
   return style.getPropertyValue(varName).trim() || "#808080";
@@ -39,8 +38,8 @@ export default function SpectrumVisualizer({
   barCount = 16,
   segmentCount = 40,
 }: SpectrumVisualizerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const barDataRef = useRef<BarData[]>(
@@ -54,14 +53,11 @@ export default function SpectrumVisualizer({
     high: string;
     peak: string;
     barBg: string;
-    borderShadow: string;
-    borderHighlight: string;
   }>({
     inactive: "#808080", low: "#4a5568", mid: "#6b7a8f", high: "#8fa0b8", peak: "#00FF00",
-    barBg: "#1e1e2a", borderShadow: "#808080", borderHighlight: "#FFFFFF"
+    barBg: "#1e1e2a"
   });
 
-  // 색상 업데이트
   const updateColors = () => {
     if (!containerRef.current) return;
     colorsRef.current = {
@@ -71,134 +67,85 @@ export default function SpectrumVisualizer({
       high: getCSSColor(containerRef.current, "--meter-high"),
       peak: getCSSColor(containerRef.current, "--meter-peak"),
       barBg: getCSSColor(containerRef.current, "--spectrum-bar-bg"),
-      borderShadow: getCSSColor(containerRef.current, "--border-shadow"),
-      borderHighlight: getCSSColor(containerRef.current, "--border-highlight"),
     };
   };
 
-  // Canvas 크기 조정
-  const resizeCanvas = () => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const rect = container.getBoundingClientRect();
+  const resizeCanvases = () => {
     const dpr = window.devicePixelRatio || 1;
-
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
-
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.scale(dpr, dpr);
-    }
+    canvasRefs.current.forEach((canvas) => {
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+      }
+    });
   };
 
-  // 스펙트럼 그리기
-  const drawSpectrum = () => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+  const drawBar = (barIndex: number) => {
+    const canvas = canvasRefs.current[barIndex];
+    if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const rect = container.getBoundingClientRect();
+    const rect = canvas.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
 
-    // 캔버스 초기화
-    ctx.clearRect(0, 0, width, height);
-
-    const padding = 8;
-    const gap = 2;
-    const borderWidth = 2;
-    const innerPadding = 0;
     const segmentGap = 1;
-
-    const availableWidth = width - padding * 2;
-    const availableHeight = height - padding * 2;
-
-    const barWidth = (availableWidth - gap * (barCount - 1)) / barCount;
-    const innerWidth = barWidth - borderWidth * 2 - innerPadding * 2;
-    const innerHeight = availableHeight - borderWidth * 2 - innerPadding * 2;
-    const segmentHeight = (innerHeight - segmentGap * (segmentCount - 1)) / segmentCount;
+    const segmentHeight = (height - segmentGap * (segmentCount - 1)) / segmentCount;
 
     const colors = colorsRef.current;
-    const barData = barDataRef.current;
+    const bar = barDataRef.current[barIndex];
 
-    for (let i = 0; i < barCount; i++) {
-      const bar = barData[i];
-      const barX = padding + i * (barWidth + gap);
-      const barY = padding;
+    // 배경
+    ctx.fillStyle = colors.barBg;
+    ctx.fillRect(0, 0, width, height);
 
-      // 3D inset 바 배경 그리기
-      // 상단/좌측 테두리 (어두운 색 - 그림자)
-      ctx.fillStyle = colors.borderShadow;
-      ctx.fillRect(barX, barY, barWidth, borderWidth); // 상단
-      ctx.fillRect(barX, barY, borderWidth, availableHeight); // 좌측
+    // 피크 세그먼트 위치
+    const peakSegIndex = Math.min(
+      Math.floor((bar.peak * segmentCount) / 100),
+      segmentCount - 1
+    );
 
-      // 하단/우측 테두리 (밝은 색 - 하이라이트)
-      ctx.fillStyle = colors.borderHighlight;
-      ctx.fillRect(barX, barY + availableHeight - borderWidth, barWidth, borderWidth); // 하단
-      ctx.fillRect(barX + barWidth - borderWidth, barY, borderWidth, availableHeight); // 우측
+    for (let segIndex = 0; segIndex < segmentCount; segIndex++) {
+      const threshold = ((segIndex + 1) / segmentCount) * 100;
+      const isActive = bar.value >= threshold;
+      const isPeak = segIndex === peakSegIndex;
 
-      // 내부 배경
-      ctx.fillStyle = colors.barBg;
-      ctx.fillRect(
-        barX + borderWidth,
-        barY + borderWidth,
-        barWidth - borderWidth * 2,
-        availableHeight - borderWidth * 2
-      );
-
-      // 세그먼트 영역
-      const segX = barX + borderWidth + innerPadding;
-      const segStartY = barY + borderWidth + innerPadding;
-
-      // 피크 세그먼트 위치 계산 (항상 바 값 바로 위, 최소 0)
-      const peakSegIndex = Math.min(
-        Math.floor((bar.peak * segmentCount) / 100),
-        segmentCount - 1
-      );
-
-      for (let segIndex = 0; segIndex < segmentCount; segIndex++) {
-        const threshold = ((segIndex + 1) / segmentCount) * 100;
-        const isActive = bar.value >= threshold;
-        const isPeak = segIndex === peakSegIndex;
-
-        // 색상 결정
-        let color = colors.inactive;
-        if (isPeak) {
-          // 피크는 항상 밝은 LED 색상
-          color = colors.peak;
-        } else if (isActive) {
-          const ratio = segIndex / segmentCount;
-          if (ratio >= 0.8) {
-            color = colors.high;
-          } else if (ratio >= 0.6) {
-            color = colors.mid;
-          } else {
-            color = colors.low;
-          }
+      let color = colors.inactive;
+      if (isPeak) {
+        color = colors.peak;
+      } else if (isActive) {
+        const ratio = segIndex / segmentCount;
+        if (ratio >= 0.8) {
+          color = colors.high;
+        } else if (ratio >= 0.6) {
+          color = colors.mid;
+        } else {
+          color = colors.low;
         }
-
-        // 세그먼트 그리기 (아래에서 위로)
-        const segY = segStartY + (segmentCount - 1 - segIndex) * (segmentHeight + segmentGap);
-
-        ctx.fillStyle = color;
-        ctx.fillRect(segX, segY, innerWidth, segmentHeight);
       }
+
+      const segY = (segmentCount - 1 - segIndex) * (segmentHeight + segmentGap);
+      ctx.fillStyle = color;
+      ctx.fillRect(0, segY, width, segmentHeight);
+    }
+  };
+
+  const drawSpectrum = () => {
+    for (let i = 0; i < barCount; i++) {
+      drawBar(i);
     }
   };
 
   useEffect(() => {
     updateColors();
-    resizeCanvas();
+    resizeCanvases();
 
-    // 테마 변경 감지
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleThemeChange = () => {
       updateColors();
@@ -206,9 +153,8 @@ export default function SpectrumVisualizer({
     };
     mediaQuery.addEventListener("change", handleThemeChange);
 
-    // 리사이즈 감지
     const resizeObserver = new ResizeObserver(() => {
-      resizeCanvas();
+      resizeCanvases();
       drawSpectrum();
     });
     if (containerRef.current) {
@@ -223,7 +169,6 @@ export default function SpectrumVisualizer({
 
   useEffect(() => {
     if (!analyserNode) {
-      // 리셋
       barDataRef.current = new Array(barCount).fill(null).map(() => ({
         value: 0, peak: 0, peakHoldTime: 0, peakFallSpeed: 0
       }));
@@ -238,7 +183,6 @@ export default function SpectrumVisualizer({
     const updateSpectrum = (timestamp: number) => {
       if (!analyserNode || !dataArrayRef.current) return;
 
-      // 프레임 레이트 제한
       const elapsed = timestamp - lastFrameTimeRef.current;
       if (elapsed < FRAME_INTERVAL) {
         animationFrameRef.current = requestAnimationFrame(updateSpectrum);
@@ -246,10 +190,8 @@ export default function SpectrumVisualizer({
       }
       lastFrameTimeRef.current = timestamp;
 
-      // 주파수 데이터 가져오기
       analyserNode.getByteFrequencyData(dataArrayRef.current as Uint8Array<ArrayBuffer>);
 
-      // 바 데이터 업데이트
       const binsPerBar = Math.floor(bufferLength / barCount);
       const prevData = barDataRef.current;
 
@@ -265,7 +207,6 @@ export default function SpectrumVisualizer({
 
         const prev = prevData[i];
 
-        // 바 값 계산
         let value: number;
         if (rawValue >= prev.value) {
           value = rawValue;
@@ -273,21 +214,17 @@ export default function SpectrumVisualizer({
           value = Math.max(rawValue, prev.value - VALUE_FALL_SPEED);
         }
 
-        // 피크 계산 (ease-in 하강)
         let peak = prev.peak;
         let peakHoldTime = prev.peakHoldTime;
         let peakFallSpeed = prev.peakFallSpeed;
 
         if (value >= peak) {
-          // 새 피크 설정, 속도 리셋
           peak = value;
           peakHoldTime = PEAK_HOLD_FRAMES;
           peakFallSpeed = 0;
         } else if (peakHoldTime > 0) {
-          // 홀드 중
           peakHoldTime--;
         } else {
-          // ease-in 하강: 점점 빨라짐
           peakFallSpeed += PEAK_FALL_ACCELERATION;
           peak = Math.max(0, peak - peakFallSpeed);
         }
@@ -295,9 +232,7 @@ export default function SpectrumVisualizer({
         prevData[i] = { value, peak, peakHoldTime, peakFallSpeed };
       }
 
-      // Canvas에 그리기
       drawSpectrum();
-
       animationFrameRef.current = requestAnimationFrame(updateSpectrum);
     };
 
@@ -316,18 +251,31 @@ export default function SpectrumVisualizer({
       <div
         ref={containerRef}
         style={{
-          width: "100%",
+          display: "flex",
+          gap: "2px",
+          padding: "8px",
           height: "100%",
         }}
       >
-        <canvas
-          ref={canvasRef}
-          style={{
-            display: "block",
-            width: "100%",
-            height: "100%",
-          }}
-        />
+        {Array.from({ length: barCount }).map((_, index) => (
+          <div
+            key={index}
+            className="inset"
+            style={{
+              flex: 1,
+              overflow: "hidden",
+            }}
+          >
+            <canvas
+              ref={(el) => { canvasRefs.current[index] = el; }}
+              style={{
+                display: "block",
+                width: "100%",
+                height: "100%",
+              }}
+            />
+          </div>
+        ))}
       </div>
     </DosPanel>
   );
