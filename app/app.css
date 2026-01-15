@@ -372,10 +372,6 @@ body {
   align-items: center;
 }
 
-.dos-list-item:hover {
-  background: var(--bg-select);
-}
-
 .dos-list-item-selected {
   background: var(--bg-main);
   color: var(--text-select);
@@ -843,6 +839,11 @@ body {
 
   .dos-list-scroll {
     max-height: 300px;
+  }
+
+  .spectrum-panel {
+    height: 150px;
+    flex: none !important;
   }
 }
 

@@ -89,9 +89,6 @@ export function useIMSPlayer({
   // 백그라운드 진입 전 재생 상태 저장
   const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
 
-  // 백그라운드 복귀 플래그
-  const needsAudioRecoveryRef = useRef<boolean>(false);
-
   // 트랙 종료 콜백 중복 호출 방지
   const trackEndCallbackFiredRef = useRef<boolean>(false);
 
@@ -486,7 +483,7 @@ export function useIMSPlayer({
    * Page Visibility API: 백그라운드/포그라운드 전환 처리
    */
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (!playerRef.current) {
         return;
       }
@@ -503,83 +500,27 @@ export function useIMSPlayer({
           uiUpdateIntervalRef.current = null;
         }
       } else {
-        // 포그라운드 복귀: AudioContext 복구 플래그 설정
+        // 포그라운드 복귀: AudioContext 복구 및 UI 타이머 재시작
         console.log('[useIMSPlayer] Returning from background');
-        needsAudioRecoveryRef.current = true;
-      }
-    };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []); // dependency 없음 - ref를 통해 최신 값 접근
-
-  /**
-   * 백그라운드 복귀 시 AudioContext 복구 처리
-   */
-  useEffect(() => {
-    if (!needsAudioRecoveryRef.current) {
-      return;
-    }
-
-    const recoverAudio = async () => {
-      needsAudioRecoveryRef.current = false;
-
-      if (!playerRef.current || !getAudioContext()) {
-        return;
-      }
-
-      console.log('[useIMSPlayer] Starting audio recovery...');
-
-      // AudioContext 복구
-      const recovered = await ensureAudioContextReady();
-      if (!recovered) {
-        console.error('[useIMSPlayer] AudioContext 복구 실패');
-        setError('AudioContext 복구에 실패했습니다. 다시 재생 버튼을 눌러주세요.');
-        return;
-      }
-
-      const player = playerRef.current;
-
-      // 이전에 재생 중이었다면 자동 재개
-      if (wasPlayingBeforeBackgroundRef.current && !player.getState().isPlaying) {
-        // Audio 요소 재시작 (Media Session 활성화)
-        if (audioElementRef?.current && audioElementRef.current.paused) {
-          try {
-            await audioElementRef.current.play();
-          } catch (error) {
-            console.warn('[useIMSPlayer] 포그라운드 복귀 시 Audio 요소 재생 실패:', error);
-          }
-        }
-
-        // 플레이어 재생 재개
-        player.play();
-        lenGenRef.current = 0;
-
-        // UI 타이머 재시작
-        if (uiUpdateIntervalRef.current) {
-          clearInterval(uiUpdateIntervalRef.current);
-        }
-        uiUpdateIntervalRef.current = setInterval(() => {
-          if (playerRef.current) {
-            setState({
-              ...playerRef.current.getState(),
-              fileName: fileNameRef.current,
-            });
-          }
-        }, 100);
-
-        // 즉시 상태 업데이트
+        // 즉시 상태 업데이트 (화면에 바로 반영)
         setState({
           ...player.getState(),
           fileName: fileNameRef.current,
         });
 
-        console.log('[useIMSPlayer] Audio recovery and playback resumed successfully');
-      } else if (player.getState().isPlaying) {
-        // 이미 재생 중이지만 UI 타이머가 꺼져있다면 재시작
+        // AudioContext 복구
+        const currentContext = getAudioContext();
+        if (currentContext && currentContext.state === 'suspended') {
+          try {
+            await currentContext.resume();
+            console.log('[useIMSPlayer] AudioContext resumed after background');
+          } catch (error) {
+            console.warn('[useIMSPlayer] AudioContext resume 실패:', error);
+          }
+        }
+
+        // UI 타이머 항상 재시작 (백그라운드에서 정지되었으므로)
         if (!uiUpdateIntervalRef.current) {
           uiUpdateIntervalRef.current = setInterval(() => {
             if (playerRef.current) {
@@ -590,14 +531,34 @@ export function useIMSPlayer({
             }
           }, 100);
         }
-        console.log('[useIMSPlayer] Audio recovery completed (already playing)');
-      } else {
-        console.log('[useIMSPlayer] Audio recovery completed (not playing)');
+
+        // 이전에 재생 중이었는데 지금은 아닌 경우 (백그라운드에서 멈춤) -> 재개
+        const isCurrentlyPlaying = player.getState().isPlaying;
+        const wasPlaying = wasPlayingBeforeBackgroundRef.current;
+
+        if (wasPlaying && !isCurrentlyPlaying) {
+          // Audio 요소 재시작 (Media Session 활성화)
+          if (audioElementRef?.current && audioElementRef.current.paused) {
+            try {
+              await audioElementRef.current.play();
+            } catch (error) {
+              console.warn('[useIMSPlayer] 포그라운드 복귀 시 Audio 요소 재생 실패:', error);
+            }
+          }
+          player.play();
+          lenGenRef.current = 0;
+        }
+
+        console.log('[useIMSPlayer] UI timer restarted after background');
       }
     };
 
-    recoverAudio();
-  }, [needsAudioRecoveryRef.current, ensureAudioContextReady]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [getAudioContext, audioElementRef]); // dependency 추가 - 콜백에서 사용하는 함수들
 
 
   /**
@@ -741,26 +702,6 @@ export function useIMSPlayer({
       // 0-100 범위를 0.0-1.0으로 변환
       gainNodeRef.current.gain.value = volume / 100;
     }
-  }, []);
-
-  /**
-   * Page Visibility API - 탭이 다시 활성화될 때 즉시 상태 업데이트
-   */
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && playerRef.current) {
-        // 탭이 다시 활성화되면 즉시 상태 업데이트
-        setState({
-          ...playerRef.current.getState(),
-          fileName: fileNameRef.current,
-        });
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
   }, []);
 
   /**

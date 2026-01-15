@@ -19,7 +19,7 @@ interface DosListProps {
   onSelect?: (key: string, index: number) => void;
 }
 
-const ITEM_HEIGHT = 24; // 각 아이템의 고정 높이 (px)
+const ITEM_HEIGHT = 28; // 각 아이템의 고정 높이 (px)
 const BUFFER_SIZE = 10; // 위아래 버퍼 아이템 개수
 
 export default function DosList({ items, selectedKey, scrollToIndex, autoScroll = false, className = "", onSelect }: DosListProps) {

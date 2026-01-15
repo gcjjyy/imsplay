@@ -144,7 +144,6 @@ export default function SpectrumVisualizer({
 
   useEffect(() => {
     updateColors();
-    resizeCanvases();
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleThemeChange = () => {
@@ -154,12 +153,21 @@ export default function SpectrumVisualizer({
     mediaQuery.addEventListener("change", handleThemeChange);
 
     const resizeObserver = new ResizeObserver(() => {
-      resizeCanvases();
-      drawSpectrum();
+      // 레이아웃 완료 후 리사이즈 처리
+      requestAnimationFrame(() => {
+        resizeCanvases();
+        drawSpectrum();
+      });
     });
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
+
+    // 초기 리사이즈도 레이아웃 완료 후 실행
+    requestAnimationFrame(() => {
+      resizeCanvases();
+      drawSpectrum();
+    });
 
     return () => {
       mediaQuery.removeEventListener("change", handleThemeChange);
@@ -192,11 +200,14 @@ export default function SpectrumVisualizer({
 
       analyserNode.getByteFrequencyData(dataArrayRef.current as Uint8Array<ArrayBuffer>);
 
-      const binsPerBar = Math.floor(bufferLength / barCount);
+      // DC 오프셋(bin 0)과 초저주파를 건너뛰기 위해 첫 몇 개 빈 제외
+      const skipBins = 2;
+      const usableBins = bufferLength - skipBins;
+      const binsPerBar = Math.floor(usableBins / barCount);
       const prevData = barDataRef.current;
 
       for (let i = 0; i < barCount; i++) {
-        const startBin = i * binsPerBar;
+        const startBin = skipBins + i * binsPerBar;
         const endBin = Math.min(startBin + binsPerBar, bufferLength);
         let sum = 0;
         for (let j = startBin; j < endBin; j++) {
@@ -247,7 +258,7 @@ export default function SpectrumVisualizer({
   }, [analyserNode, barCount, segmentCount]);
 
   return (
-    <DosPanel className="flex-1">
+    <DosPanel className="flex-1 spectrum-panel">
       <div
         ref={containerRef}
         style={{
@@ -263,6 +274,7 @@ export default function SpectrumVisualizer({
             className="inset"
             style={{
               flex: 1,
+              height: "100%",
               overflow: "hidden",
             }}
           >
