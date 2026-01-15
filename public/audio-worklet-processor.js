@@ -25,6 +25,8 @@ class AdPlugProcessor extends AudioWorkletProcessor {
         this.sampleQueue = [];
         this.currentBuffer = null;
         this.currentOffset = 0;
+        // 클리어 완료 알림
+        this.port.postMessage({ type: 'cleared' });
       }
     };
   }

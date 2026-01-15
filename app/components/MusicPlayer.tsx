@@ -313,7 +313,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     audioElementRef,
   });
 
-  const { state, error, isPlayerReady, analyserNode, play, pause, stop, setMasterVolume, checkPlayerReady, refreshState } = player;
+  const { state, error, isPlayerReady, analyserNode, play, pause, stop, setMasterVolume, checkPlayerReady, refreshState, hardReset } = player;
 
   // Format-aware ready state (단일 플레이어 사용으로 간소화)
   const isCurrentPlayerReady = useMemo(() => {
@@ -572,9 +572,9 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     issMap?: Map<string, File>,
     autoPlayAfterLoad: boolean = false
   ) => {
-    // 현재 재생 중이면 정지
+    // 현재 재생 중이면 완전 리셋 (버퍼 클리어, 시간 리셋 등)
     if (state?.isPlaying) {
-      stop();
+      await hardReset();
     }
 
     setIsLoadingTrack(true);
@@ -652,7 +652,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     } finally {
       setIsLoadingTrack(false);
     }
-  }, [isUserFolder, userMusicFiles, userBnkFiles, musicSamples, state?.isPlaying, stop]);
+  }, [isUserFolder, userMusicFiles, userBnkFiles, musicSamples, state?.isPlaying, hardReset]);
 
   /**
    * titleMap을 사용하여 샘플 목록에 제목 추가
