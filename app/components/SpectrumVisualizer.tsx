@@ -253,7 +253,6 @@ export default function SpectrumVisualizer({
         style={{
           display: "flex",
           gap: "2px",
-          padding: "8px",
           height: "100%",
         }}
       >
