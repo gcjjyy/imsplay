@@ -522,7 +522,7 @@ export function useAdPlugPlayer({
       });
 
       // 오디오 파이프라인이 완전히 비워질 때까지 대기
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 20));
     }
 
     // UI 상태 즉시 리셋
@@ -642,9 +642,9 @@ export function useAdPlugPlayer({
           }, 100);
         });
 
-        // 오디오 파이프라인이 완전히 비워질 때까지 대기 (새 재생과 동일한 조건)
-        // AudioWorklet process()는 ~2.9ms 간격으로 호출됨, 50ms면 충분
-        await new Promise(resolve => setTimeout(resolve, 50));
+        // 오디오 파이프라인이 완전히 비워질 때까지 대기
+        // 너무 길면 ISS가 늦어지고, 너무 짧으면 이전 샘플이 남음
+        await new Promise(resolve => setTimeout(resolve, 20));
       }
 
       // 딜레이 중 트랙이 변경되었을 수 있음
