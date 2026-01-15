@@ -85,6 +85,10 @@ export function useAdPlugPlayer({
   const sampleBufferRef = useRef<Int16Array>(new Int16Array(0));
   const sampleBufferOffsetRef = useRef<number>(0);
 
+  // 디버깅용 타이밍 체크
+  const lastCallbackTimeRef = useRef<number>(0);
+  const callbackCountRef = useRef<number>(0);
+
   // 재생 상태
   const isPlayingRef = useRef<boolean>(false);
   const isPausedRef = useRef<boolean>(false);
@@ -153,9 +157,15 @@ export function useAdPlugPlayer({
           setAudioContext(audioContext);
         }
 
+        // 실제 샘플레이트 확인 (브라우저가 지원하지 않으면 다를 수 있음)
+        const actualSampleRate = audioContext.sampleRate;
+        if (actualSampleRate !== SAMPLE_RATE) {
+          console.warn(`[useAdPlugPlayer] 요청한 샘플레이트 ${SAMPLE_RATE}Hz, 실제 ${actualSampleRate}Hz`);
+        }
+
         // AdPlug 플레이어 생성 및 초기화
         const player = new AdPlugPlayer();
-        await player.init(audioContext.sampleRate);
+        await player.init(actualSampleRate);
 
         if (cancelled) return;
 
@@ -251,9 +261,22 @@ export function useAdPlugPlayer({
         return;
       }
 
+      // 타이밍 체크 (디버깅)
+      const now = performance.now();
+      const elapsed = now - lastCallbackTimeRef.current;
+      lastCallbackTimeRef.current = now;
+      callbackCountRef.current++;
+
+      // 예상 간격: 8192 samples / 49716 Hz ≈ 165ms
+      // 너무 빠르거나 느리면 경고
+      if (callbackCountRef.current > 2 && (elapsed < 100 || elapsed > 250)) {
+        console.warn(`[Audio] 비정상 콜백 간격: ${elapsed.toFixed(1)}ms (예상: ~165ms)`);
+      }
+
       const player = playerRef.current;
       let outputOffset = 0;
       let trackFinished = false;
+      let generateCount = 0;
 
       // 출력 버퍼를 채울 때까지 반복
       while (outputOffset < framesNeeded) {
@@ -273,6 +296,7 @@ export function useAdPlugPlayer({
         } else {
           // 버퍼가 비었으면 WASM에서 새 샘플 생성
           const { samples, finished } = player.generateSamples();
+          generateCount++;
 
           if (samples.length > 0) {
             // 새 버퍼 설정
@@ -291,6 +315,11 @@ export function useAdPlugPlayer({
             trackFinished = true;
           }
         }
+      }
+
+      // generateSamples가 2번 이상 호출되면 경고
+      if (generateCount > 1) {
+        console.warn(`[Audio] generateSamples ${generateCount}번 호출됨 (예상: 1번)`);
       }
 
       // 트랙 종료 처리
