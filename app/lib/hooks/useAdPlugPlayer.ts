@@ -459,6 +459,7 @@ export function useAdPlugPlayer({
 
   /**
    * 정리 함수 (트랙 전환 시 - 오디오 노드는 유지)
+   * 버퍼 클리어는 hardReset()에서 처리하므로 여기서는 하지 않음
    */
   const cleanup = useCallback(() => {
     // 재생 상태 먼저 중지 (워크렛 요청 무시하도록)
@@ -470,11 +471,6 @@ export function useAdPlugPlayer({
     totalSamplesSentRef.current = 0;
 
     stopSampleGeneration();
-
-    // 워크렛 버퍼 클리어 (연결은 유지)
-    if (workletNodeRef.current) {
-      workletNodeRef.current.port.postMessage({ type: 'clear' });
-    }
 
     // 플레이어만 정리 (WASM 상태 리셋)
     if (playerRef.current) {
@@ -620,34 +616,11 @@ export function useAdPlugPlayer({
       }
     }
 
-    // 일시정지에서 재개하는 경우가 아니면 버퍼 클리어 및 리셋
+    // 일시정지에서 재개하는 경우가 아니면 리셋
+    // 버퍼 클리어는 hardReset()에서 이미 처리됨 (트랙 전환 시)
+    // 새 재생 시에는 워크렛이 새로 생성되어 버퍼가 비어있음
     if (!isPausedRef.current) {
-      // 워크렛 버퍼 클리어 및 완료 대기
-      if (workletNodeRef.current) {
-        await new Promise<void>((resolve) => {
-          const handler = (event: MessageEvent) => {
-            if (event.data.type === 'cleared') {
-              workletNodeRef.current?.port.removeEventListener('message', handler);
-              resolve();
-            }
-          };
-          workletNodeRef.current!.port.addEventListener('message', handler);
-          workletNodeRef.current!.port.postMessage({ type: 'clear' });
-          // 타임아웃 (100ms 후에도 응답 없으면 진행)
-          setTimeout(() => {
-            workletNodeRef.current?.port.removeEventListener('message', handler);
-            resolve();
-          }, 100);
-        });
-
-      }
-
-      // 딜레이 중 트랙이 변경되었을 수 있음
-      if (!playerRef.current || !playerRef.current.isFileLoaded()) {
-        return;
-      }
-
-      // 시간 추적 완전 리셋 (새 재생과 동일한 초기 상태)
+      // 시간 추적 완전 리셋
       playbackStartTimeRef.current = 0;
       totalSamplesSentRef.current = 0;
       trackEndCallbackFiredRef.current = false;
