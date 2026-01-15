@@ -95,9 +95,6 @@ export function useAdPlugPlayer({
   const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
   const [needsAudioRecovery, setNeedsAudioRecovery] = useState<boolean>(false);
 
-  // 샘플 생성 루프 제어
-  const sampleGenerationIntervalRef = useRef<number | null>(null);
-
   // AudioContext 접근 헬퍼
   const getAudioContext = useCallback(() => {
     return sharedAudioContextRef?.current ?? localAudioContextRef.current;
@@ -155,31 +152,16 @@ export function useAdPlugPlayer({
    * 샘플 생성 루프 시작
    */
   const startSampleGeneration = useCallback(() => {
-    if (sampleGenerationIntervalRef.current) {
-      return;
-    }
-
-    // 초기 버퍼 채우기 (여러 번 생성)
-    for (let i = 0; i < 4; i++) {
-      generateAndSendSamples();
-    }
-
-    // 주기적으로 샘플 생성 (워크렛이 요청할 때도 생성하지만, 보험용)
-    sampleGenerationIntervalRef.current = window.setInterval(() => {
-      if (isPlayingRef.current) {
-        generateAndSendSamples();
-      }
-    }, 50);
+    // 초기 버퍼 채우기 (2번만 - 약 330ms 분량)
+    generateAndSendSamples();
+    generateAndSendSamples();
   }, [generateAndSendSamples]);
 
   /**
-   * 샘플 생성 루프 중지
+   * 샘플 생성 루프 중지 (더 이상 사용 안 함)
    */
   const stopSampleGeneration = useCallback(() => {
-    if (sampleGenerationIntervalRef.current) {
-      clearInterval(sampleGenerationIntervalRef.current);
-      sampleGenerationIntervalRef.current = null;
-    }
+    // 워크렛 요청 기반으로 변경되어 별도 중지 불필요
   }, []);
 
   /**
