@@ -19,12 +19,13 @@ interface BarData {
   value: number;
   peak: number;
   peakHoldTime: number;
+  peakFallSpeed: number; // ease-in을 위한 가속도
 }
 
 const TARGET_FPS = 30;
 const FRAME_INTERVAL = 1000 / TARGET_FPS;
 const PEAK_HOLD_FRAMES = 15;
-const PEAK_FALL_SPEED = 1;
+const PEAK_FALL_ACCELERATION = 0.3; // 프레임당 가속도
 const VALUE_FALL_SPEED = 4;
 
 // CSS 변수에서 색상 값 읽기
@@ -43,7 +44,7 @@ export default function SpectrumVisualizer({
   const animationFrameRef = useRef<number | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const barDataRef = useRef<BarData[]>(
-    new Array(barCount).fill(null).map(() => ({ value: 0, peak: 0, peakHoldTime: 0 }))
+    new Array(barCount).fill(null).map(() => ({ value: 0, peak: 0, peakHoldTime: 0, peakFallSpeed: 0 }))
   );
   const lastFrameTimeRef = useRef<number>(0);
   const colorsRef = useRef<{
@@ -188,7 +189,7 @@ export default function SpectrumVisualizer({
     if (!analyserNode) {
       // 리셋
       barDataRef.current = new Array(barCount).fill(null).map(() => ({
-        value: 0, peak: 0, peakHoldTime: 0
+        value: 0, peak: 0, peakHoldTime: 0, peakFallSpeed: 0
       }));
       drawSpectrum();
       return;
@@ -236,20 +237,26 @@ export default function SpectrumVisualizer({
           value = Math.max(rawValue, prev.value - VALUE_FALL_SPEED);
         }
 
-        // 피크 계산
+        // 피크 계산 (ease-in 하강)
         let peak = prev.peak;
         let peakHoldTime = prev.peakHoldTime;
+        let peakFallSpeed = prev.peakFallSpeed;
 
         if (value >= peak) {
+          // 새 피크 설정, 속도 리셋
           peak = value;
           peakHoldTime = PEAK_HOLD_FRAMES;
+          peakFallSpeed = 0;
         } else if (peakHoldTime > 0) {
+          // 홀드 중
           peakHoldTime--;
         } else {
-          peak = Math.max(0, peak - PEAK_FALL_SPEED);
+          // ease-in 하강: 점점 빨라짐
+          peakFallSpeed += PEAK_FALL_ACCELERATION;
+          peak = Math.max(0, peak - peakFallSpeed);
         }
 
-        prevData[i] = { value, peak, peakHoldTime };
+        prevData[i] = { value, peak, peakHoldTime, peakFallSpeed };
       }
 
       // Canvas에 그리기
