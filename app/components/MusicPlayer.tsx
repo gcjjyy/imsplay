@@ -278,8 +278,8 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   const [masterVolume, setMasterVolumeState] = useState<number>(100);
   const [shouldAutoScroll, setShouldAutoScroll] = useState<boolean>(false);
 
-  // UI 갱신 트리거 (스펙트럼 시각화 + 상태 갱신)
-  const [updateTrigger, setUpdateTrigger] = useState<number>(0);
+  // UI 갱신 애니메이션 ref (requestAnimationFrame 기반)
+  const animationIdRef = useRef<number>(0);
 
   // 드래그 앤 드롭 상태
   const [isDragging, setIsDragging] = useState(false);
@@ -873,75 +873,35 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     }
   }, [state?.isPlaying, state?.currentByte, state?.totalSize, state?.fileName, repeatMode, currentMusicFile, isLoadingTrack, playNextTrack]);
 
+  // Media Session API용 함수 refs (핸들러 재등록 방지)
+  const playRef = useRef(play);
+  const pauseRef = useRef(pause);
+  const stopRef = useRef(stop);
+  const playPreviousTrackRef = useRef(playPreviousTrack);
+  const playNextTrackRefForMedia = useRef(playNextTrack);
+
+  // refs 업데이트
+  useEffect(() => {
+    playRef.current = play;
+    pauseRef.current = pause;
+    stopRef.current = stop;
+    playPreviousTrackRef.current = playPreviousTrack;
+    playNextTrackRefForMedia.current = playNextTrack;
+  }, [play, pause, stop, playPreviousTrack, playNextTrack]);
+
   /**
-   * Media Session API 통합 (블루투스 이어폰, 잠금 화면 제어 지원)
+   * Media Session API - 액션 핸들러 등록 (한 번만)
    */
   useEffect(() => {
-    if (!("mediaSession" in navigator)) {
-      return;
-    }
+    if (!("mediaSession" in navigator)) return;
 
-    // 재생 상태 설정
-    if (state?.isPlaying) {
-      navigator.mediaSession.playbackState = "playing";
-    } else if (state?.isPaused) {
-      navigator.mediaSession.playbackState = "paused";
-    } else {
-      navigator.mediaSession.playbackState = "none";
-    }
-
-    // 메타데이터 업데이트
-    if (currentMusicFile) {
-      const title = isUserFolder
-        ? userMusicFileTitles.get(currentMusicFile.name) || currentMusicFile.name.replace(/\.[^.]+$/, '')
-        : musicSamples[playingTrackIndex]?.title || currentMusicFile.name.replace(/\.[^.]+$/, '');
-
-      const artist = format ? `${format} Music` : "AdLib Music";
-      const album = isUserFolder ? userFolderName : "Sample Music";
-
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: title,
-        artist: artist,
-        album: album,
-      });
-    }
-
-    // 재생 위치 정보 업데이트
-    if (state && state.totalSize > 0) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: state.totalSize / 1000, // ms -> seconds
-          position: state.currentByte / 1000, // ms -> seconds
-          playbackRate: 1.0,
-        });
-      } catch (e) {
-        // setPositionState not supported in some browsers
-      }
-    }
-
-    // 액션 핸들러 설정
-    navigator.mediaSession.setActionHandler("play", () => {
-      if (play) play();
-    });
-
-    navigator.mediaSession.setActionHandler("pause", () => {
-      if (pause) pause();
-    });
-
-    navigator.mediaSession.setActionHandler("previoustrack", () => {
-      playPreviousTrack();
-    });
-
-    navigator.mediaSession.setActionHandler("nexttrack", () => {
-      playNextTrack();
-    });
-
-    navigator.mediaSession.setActionHandler("stop", () => {
-      if (stop) stop();
-    });
+    navigator.mediaSession.setActionHandler("play", () => playRef.current?.());
+    navigator.mediaSession.setActionHandler("pause", () => pauseRef.current?.());
+    navigator.mediaSession.setActionHandler("previoustrack", () => playPreviousTrackRef.current?.());
+    navigator.mediaSession.setActionHandler("nexttrack", () => playNextTrackRefForMedia.current?.());
+    navigator.mediaSession.setActionHandler("stop", () => stopRef.current?.());
 
     return () => {
-      // cleanup: 핸들러 제거
       if ("mediaSession" in navigator) {
         navigator.mediaSession.setActionHandler("play", null);
         navigator.mediaSession.setActionHandler("pause", null);
@@ -950,20 +910,89 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         navigator.mediaSession.setActionHandler("stop", null);
       }
     };
-  }, [state?.isPlaying, state?.isPaused, state?.currentByte, state?.totalSize, currentMusicFile, play, pause, stop, playPreviousTrack, playNextTrack, isUserFolder, userMusicFileTitles, musicSamples, playingTrackIndex, format, userFolderName]);
+  }, []); // 빈 의존성 - 한 번만 등록
 
   /**
-   * 통합 UI 갱신 인터벌 (50ms)
-   * - 플레이어 상태 갱신 (재생 위치, 틱 등)
-   * - 스펙트럼 시각화 트리거
+   * Media Session API - 재생 상태 업데이트
    */
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      refreshState();
-      setUpdateTrigger(prev => prev + 1);
-    }, 50);
+    if (!("mediaSession" in navigator)) return;
 
-    return () => clearInterval(intervalId);
+    if (state?.isPlaying) {
+      navigator.mediaSession.playbackState = "playing";
+    } else if (state?.isPaused) {
+      navigator.mediaSession.playbackState = "paused";
+    } else {
+      navigator.mediaSession.playbackState = "none";
+    }
+  }, [state?.isPlaying, state?.isPaused]);
+
+  /**
+   * Media Session API - 메타데이터 업데이트 (트랙 변경 시에만)
+   */
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !currentMusicFile) return;
+
+    const title = isUserFolder
+      ? userMusicFileTitles.get(currentMusicFile.name) || currentMusicFile.name.replace(/\.[^.]+$/, '')
+      : musicSamples[playingTrackIndex]?.title || currentMusicFile.name.replace(/\.[^.]+$/, '');
+
+    const artist = format ? `${format} Music` : "AdLib Music";
+    const album = isUserFolder ? userFolderName : "Sample Music";
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: title,
+      artist: artist,
+      album: album,
+    });
+  }, [currentMusicFile, isUserFolder, userMusicFileTitles, musicSamples, playingTrackIndex, format, userFolderName]);
+
+  // 위치 업데이트 throttle을 위한 ref
+  const lastPositionUpdateRef = useRef<number>(0);
+
+  /**
+   * Media Session API - 위치 업데이트 (1초 throttle)
+   */
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !state || state.totalSize <= 0) return;
+
+    const now = Date.now();
+    if (now - lastPositionUpdateRef.current < 1000) return; // 1초 throttle
+
+    lastPositionUpdateRef.current = now;
+
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: state.totalSize / 1000,
+        position: state.currentByte / 1000,
+        playbackRate: 1.0,
+      });
+    } catch {
+      // setPositionState not supported in some browsers
+    }
+  }, [state?.currentByte, state?.totalSize]);
+
+  /**
+   * UI 갱신 루프 (requestAnimationFrame 기반, ~30fps)
+   * - 플레이어 상태 갱신 (재생 위치, 틱 등)
+   */
+  useEffect(() => {
+    let lastTime = 0;
+    const targetInterval = 1000 / 30; // 30fps 목표
+
+    const animate = (timestamp: number) => {
+      if (timestamp - lastTime >= targetInterval) {
+        refreshState();
+        lastTime = timestamp;
+      }
+      animationIdRef.current = requestAnimationFrame(animate);
+    };
+
+    animationIdRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationIdRef.current);
+    };
   }, [refreshState]);
 
   // progress bar
@@ -1477,7 +1506,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
           </DosPanel>
 
           {/* 스펙트럼 시각화 */}
-          <SpectrumVisualizer analyserNode={analyserNode} updateTrigger={updateTrigger} />
+          <SpectrumVisualizer analyserNode={analyserNode} />
 
           {/* 재생 진행률 및 볼륨 */}
           <DosPanel style={{ flexShrink: 0 }}>

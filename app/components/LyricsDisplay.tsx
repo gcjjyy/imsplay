@@ -22,37 +22,40 @@ export default function LyricsDisplay({
   // ISS 파일이 없거나 재생 중이 아니면 크레딧 표시
   const showCredits = !issData || !isPlaying;
 
-  // 현재 가사 레코드 찾기 (바이너리 검색)
-  const currentRecord = useMemo(() => {
-    if (!issData || !isPlaying) return null;
+  // 현재 가사 레코드와 인덱스 찾기 (바이너리 검색)
+  const { currentRecord, currentIndex } = useMemo(() => {
+    if (!issData || !isPlaying) return { currentRecord: null, currentIndex: -1 };
 
     // ISS 파일은 tick/8로 저장됨
     const adjustedTick = Math.floor(currentTick / 8);
 
-    // 바이너리 검색으로 현재 레코드 찾기
+    // 바이너리 검색으로 현재 레코드와 인덱스 찾기
     let left = 0;
     let right = issData.records.length - 1;
-    let result = null;
+    let resultIndex = -1;
 
     while (left <= right) {
       const mid = Math.floor((left + right) / 2);
       if (issData.records[mid].kasaTick <= adjustedTick) {
-        result = issData.records[mid];
+        resultIndex = mid;
         left = mid + 1;
       } else {
         right = mid - 1;
       }
     }
 
-    return result;
+    return {
+      currentRecord: resultIndex >= 0 ? issData.records[resultIndex] : null,
+      currentIndex: resultIndex,
+    };
   }, [issData, currentTick, isPlaying]);
 
-  // 다음 가사 레코드 찾기 (다른 라인)
+  // 다음 가사 레코드 찾기 (다른 라인) - indexOf 제거, 캐시된 인덱스 사용
   const nextRecord = useMemo(() => {
-    if (!issData || !currentRecord) return null;
+    if (!issData || !currentRecord || currentIndex < 0) return null;
 
-    const currentIndex = issData.records.indexOf(currentRecord);
-    if (currentIndex >= 0 && currentIndex < issData.records.length - 1) {
+    // 캐시된 인덱스 사용 (indexOf 대신)
+    if (currentIndex < issData.records.length - 1) {
       // 다음 레코드 중 라인이 다른 첫 번째 레코드 찾기
       for (let i = currentIndex + 1; i < issData.records.length; i++) {
         if (issData.records[i].line !== currentRecord.line) {
@@ -61,7 +64,7 @@ export default function LyricsDisplay({
       }
     }
     return null;
-  }, [issData, currentRecord]);
+  }, [issData, currentRecord, currentIndex]);
 
   // 가사 라인 계산 (useMemo 순서 유지를 위해 early return 전에 선언)
   const currentLine = useMemo(() => {

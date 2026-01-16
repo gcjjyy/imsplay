@@ -107,6 +107,9 @@ export function useAdPlugPlayer({
   // 워크렛 콜백에서 사용할 함수 ref (클로저 문제 방지)
   const generateAndSendSamplesRef = useRef<() => void>(() => {});
 
+  // Float32Array 버퍼 재사용 (메모리 할당 최적화)
+  const floatBufferRef = useRef<Float32Array | null>(null);
+
   // AudioContext 접근 헬퍼
   const getAudioContext = useCallback(() => {
     return sharedAudioContextRef?.current ?? localAudioContextRef.current;
@@ -138,20 +141,27 @@ export function useAdPlugPlayer({
     const { samples, finished } = player.generateSamples();
 
     if (samples.length > 0) {
-      // Int16 -> Float32 변환
-      const floatSamples = new Float32Array(samples.length);
+      // 버퍼 재사용 (크기가 다르면 재할당)
+      if (!floatBufferRef.current || floatBufferRef.current.length !== samples.length) {
+        floatBufferRef.current = new Float32Array(samples.length);
+      }
+
+      // Int16 -> Float32 변환 (곱셈 사용, 나눗셈보다 빠름)
+      const scale = 1 / 32768.0;
+      const floatSamples = floatBufferRef.current;
       for (let i = 0; i < samples.length; i++) {
-        floatSamples[i] = samples[i] / 32768.0;
+        floatSamples[i] = samples[i] * scale;
       }
 
       // 전송된 샘플 수 추적 (스테레오이므로 /2)
       totalSamplesSentRef.current += samples.length / 2;
 
-      // 워크렛으로 전송
+      // 워크렛으로 전송 (복사본 전송 - Transferable로 원본 버퍼 손실 방지)
+      const transferBuffer = floatSamples.slice();
       workletNodeRef.current.port.postMessage({
         type: 'samples',
-        samples: floatSamples
-      }, [floatSamples.buffer]);
+        samples: transferBuffer
+      }, [transferBuffer.buffer]);
     }
 
     // 트랙 종료 처리 (최소 1초 이상 재생 후에만)

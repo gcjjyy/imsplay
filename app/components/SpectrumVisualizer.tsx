@@ -11,7 +11,6 @@ import DosPanel from "~/components/dos-ui/DosPanel";
 
 interface SpectrumVisualizerProps {
   analyserNode: AnalyserNode | null;
-  updateTrigger?: number; // 외부에서 업데이트 트리거
   barCount?: number;
   segmentCount?: number;
 }
@@ -34,12 +33,13 @@ function getCSSColor(element: HTMLElement, varName: string): string {
 
 export default function SpectrumVisualizer({
   analyserNode,
-  updateTrigger = 0,
   barCount = 16,
   segmentCount = 40,
 }: SpectrumVisualizerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const canvasCtxRefs = useRef<(CanvasRenderingContext2D | null)[]>([]); // Canvas context 캐싱
+  const canvasDimensionsRef = useRef<{ width: number; height: number }[]>([]); // 캔버스 크기 캐싱
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const barDataRef = useRef<BarData[]>(
     new Array(barCount).fill(null).map(() => ({ value: 0, peak: 0, peakHoldTime: 0, peakFallSpeed: 0 }))
@@ -70,8 +70,14 @@ export default function SpectrumVisualizer({
 
   const resizeCanvases = () => {
     const dpr = window.devicePixelRatio || 1;
-    canvasRefs.current.forEach((canvas) => {
-      if (!canvas) return;
+    canvasCtxRefs.current = [];
+    canvasDimensionsRef.current = [];
+    canvasRefs.current.forEach((canvas, index) => {
+      if (!canvas) {
+        canvasCtxRefs.current[index] = null;
+        canvasDimensionsRef.current[index] = { width: 0, height: 0 };
+        return;
+      }
       const rect = canvas.getBoundingClientRect();
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
@@ -79,19 +85,21 @@ export default function SpectrumVisualizer({
       if (ctx) {
         ctx.scale(dpr, dpr);
       }
+      // 캐싱
+      canvasCtxRefs.current[index] = ctx;
+      canvasDimensionsRef.current[index] = { width: rect.width, height: rect.height };
     });
   };
 
   const drawBar = (barIndex: number) => {
-    const canvas = canvasRefs.current[barIndex];
-    if (!canvas) return;
+    // 캐싱된 context와 크기 사용
+    const ctx = canvasCtxRefs.current[barIndex];
+    const dims = canvasDimensionsRef.current[barIndex];
+    if (!ctx || !dims) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
+    const width = dims.width;
+    const height = dims.height;
+    if (width === 0 || height === 0) return;
 
     const segmentGap = 1;
     const segmentHeight = (height - segmentGap * (segmentCount - 1)) / segmentCount;
@@ -187,58 +195,80 @@ export default function SpectrumVisualizer({
     dataArrayRef.current = new Uint8Array(analyserNode.frequencyBinCount);
   }, [analyserNode, barCount]);
 
-  // updateTrigger가 변경될 때마다 스펙트럼 업데이트
+  // 자체 requestAnimationFrame 루프 (30fps 목표)
   useEffect(() => {
     if (!analyserNode || !dataArrayRef.current) return;
 
-    const bufferLength = analyserNode.frequencyBinCount;
-    analyserNode.getByteFrequencyData(dataArrayRef.current as Uint8Array<ArrayBuffer>);
+    let animationId: number;
+    let lastTime = 0;
+    const targetInterval = 1000 / 30; // 30fps
 
-    // DC 오프셋(bin 0)과 초저주파를 건너뛰기 위해 첫 몇 개 빈 제외
-    const skipBins = 2;
-    const usableBins = bufferLength - skipBins;
-    const binsPerBar = Math.floor(usableBins / barCount);
-    const prevData = barDataRef.current;
+    const updateBarData = () => {
+      if (!dataArrayRef.current) return;
 
-    for (let i = 0; i < barCount; i++) {
-      const startBin = skipBins + i * binsPerBar;
-      const endBin = Math.min(startBin + binsPerBar, bufferLength);
-      let sum = 0;
-      for (let j = startBin; j < endBin; j++) {
-        sum += dataArrayRef.current[j];
+      const bufferLength = analyserNode.frequencyBinCount;
+      analyserNode.getByteFrequencyData(dataArrayRef.current as Uint8Array<ArrayBuffer>);
+
+      // DC 오프셋(bin 0)과 초저주파를 건너뛰기 위해 첫 몇 개 빈 제외
+      const skipBins = 2;
+      const usableBins = bufferLength - skipBins;
+      const binsPerBar = Math.floor(usableBins / barCount);
+      const prevData = barDataRef.current;
+
+      for (let i = 0; i < barCount; i++) {
+        const startBin = skipBins + i * binsPerBar;
+        const endBin = Math.min(startBin + binsPerBar, bufferLength);
+        let sum = 0;
+        for (let j = startBin; j < endBin; j++) {
+          sum += dataArrayRef.current[j];
+        }
+        const avg = sum / (endBin - startBin);
+        const rawValue = Math.round((avg / 255) * 100);
+
+        const prev = prevData[i];
+
+        let value: number;
+        if (rawValue >= prev.value) {
+          value = rawValue;
+        } else {
+          value = Math.max(rawValue, prev.value - VALUE_FALL_SPEED);
+        }
+
+        let peak = prev.peak;
+        let peakHoldTime = prev.peakHoldTime;
+        let peakFallSpeed = prev.peakFallSpeed;
+
+        if (value >= peak) {
+          peak = value;
+          peakHoldTime = PEAK_HOLD_FRAMES;
+          peakFallSpeed = 0;
+        } else if (peakHoldTime > 0) {
+          peakHoldTime--;
+        } else {
+          peakFallSpeed += PEAK_FALL_ACCELERATION;
+          peak = Math.max(0, peak - peakFallSpeed);
+        }
+
+        prevData[i] = { value, peak, peakHoldTime, peakFallSpeed };
       }
-      const avg = sum / (endBin - startBin);
-      const rawValue = Math.round((avg / 255) * 100);
+    };
 
-      const prev = prevData[i];
-
-      let value: number;
-      if (rawValue >= prev.value) {
-        value = rawValue;
-      } else {
-        value = Math.max(rawValue, prev.value - VALUE_FALL_SPEED);
+    const animate = (timestamp: number) => {
+      // 30fps로 제한
+      if (timestamp - lastTime >= targetInterval) {
+        updateBarData();
+        drawSpectrum();
+        lastTime = timestamp;
       }
+      animationId = requestAnimationFrame(animate);
+    };
 
-      let peak = prev.peak;
-      let peakHoldTime = prev.peakHoldTime;
-      let peakFallSpeed = prev.peakFallSpeed;
+    animationId = requestAnimationFrame(animate);
 
-      if (value >= peak) {
-        peak = value;
-        peakHoldTime = PEAK_HOLD_FRAMES;
-        peakFallSpeed = 0;
-      } else if (peakHoldTime > 0) {
-        peakHoldTime--;
-      } else {
-        peakFallSpeed += PEAK_FALL_ACCELERATION;
-        peak = Math.max(0, peak - peakFallSpeed);
-      }
-
-      prevData[i] = { value, peak, peakHoldTime, peakFallSpeed };
-    }
-
-    drawSpectrum();
-  }, [updateTrigger, analyserNode, barCount, segmentCount]);
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [analyserNode, barCount, segmentCount]);
 
   return (
     <DosPanel className="flex-1 spectrum-panel">
