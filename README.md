@@ -130,7 +130,7 @@ imsplay/
 
 ## 지원 파일 형식 상세
 
-### IMS (Interactive Music System)
+### IMS (Iyagi Music Sound)
 
 한국에서 개발된 이벤트 기반 음악 형식으로, 다음과 같은 특징이 있습니다:
 
