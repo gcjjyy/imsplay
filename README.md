@@ -1,30 +1,32 @@
 # IMS/ROL AdLib 음악 플레이어
 
-브라우저에서 레거시 AdLib 음악 파일(IMS 및 ROL 형식)을 OPL2 FM 신디사이저로 재생하는 웹 기반 음악 플레이어입니다.
+브라우저에서 레거시 AdLib 음악 파일을 OPL2/OPL3 FM 신디사이저로 재생하는 웹 기반 음악 플레이어입니다.
 
 ## 주요 기능
 
 ### 🎵 음악 재생
+- **AdPlug 2.4 기반** - 60개 이상의 AdLib 음악 포맷 지원 (WASM으로 컴파일)
 - **IMS (Interactive Music System)** - 한국에서 개발된 이벤트 기반 음악 형식 (47개 샘플 포함)
 - **ROL (AdLib Visual Composer)** - AdLib Visual Composer 음악 형식 (6개 샘플 포함)
+- **VGM (Video Game Music)** - 비디오 게임 음악 포맷 지원
 - **BNK (Instrument Bank)** - 악기 정의 파일 (STANDARD.BNK + 12개 커스텀 뱅크)
-- 정확한 OPL2 FM 신디사이저 에뮬레이션 (Nuked-OPL3 사용)
 - 9채널 멜로딕 또는 11채널 멜로딕+타악기 모드
 - 루프 재생 (전체/한곡/셔플)
 
 ### 🎛️ 재생 제어
 - 재생/정지
 - 이전/다음 곡
-- 마스터 볼륨 조절 (0-127)
+- 마스터 볼륨 조절 (0-200)
 - 템포 조절 (50%-200%)
 - 키 조옮김 (-13 ~ +13, ROL 전용)
 - 채널별 볼륨 및 뮤트
 
 ### 📊 시각화
-- 실시간 채널 볼륨 미터 (Impulse Tracker 스타일)
+- 실시간 채널 볼륨 미터 (Impulse Tracker 스타일, 피크 인디케이터)
 - 88건반 피아노 롤 시각화
 - 채널별 악기 이름 표시
 - BPM 표시가 포함된 재생 진행 바
+- ISS 가사 싱크 표시
 
 ### 💾 사용자 경험
 - DOS 레트로 스타일 UI (VGA 16색 팔레트)
@@ -33,6 +35,7 @@
 - 반응형 레이아웃 (모바일 지원)
 - Media Session API 통합 (시스템 미디어 컨트롤)
 - Safari 자동재생 정책 준수
+- 다크/라이트 모드 지원 (Anysphere Dark 테마)
 
 ## 기술 스택
 
@@ -40,7 +43,7 @@
 - **언어**: TypeScript 5
 - **스타일링**: Tailwind CSS 4
 - **빌드**: Vite 7
-- **오디오**: Nuked-OPL3 에뮬레이터 (WASM) + Web Audio API
+- **오디오**: AdPlug 2.4 (WASM) + Web Audio API (AudioWorklet)
 - **배포**: Docker 멀티 스테이지 빌드
 
 ## 시작하기
@@ -105,23 +108,19 @@ imsplay/
 │   │   ├── PianoRoll.tsx            # 피아노 롤 시각화
 │   │   └── dos-ui/                  # DOS 스타일 UI 컴포넌트
 │   ├── lib/                         # 핵심 음악 엔진
-│   │   ├── rol/                     # ROL 관련 라이브러리
-│   │   │   ├── opl-engine.ts       # OPL2 칩 에뮬레이션
-│   │   │   ├── rol-player.ts       # ROL 재생 엔진
-│   │   │   ├── rol-parser.ts       # ROL 파일 파서
-│   │   │   └── bnk-parser.ts       # BNK 파일 파서
-│   │   ├── ims/                     # IMS 관련 라이브러리
-│   │   │   ├── ims-player.ts       # IMS 재생 엔진
-│   │   │   └── ims-parser.ts       # IMS 파일 파서
+│   │   ├── adplug/                  # AdPlug WASM 래퍼
+│   │   │   └── adplug.ts           # AdPlug TypeScript 인터페이스
 │   │   └── hooks/                   # React 훅
-│   │       ├── useROLPlayer.ts     # ROL 플레이어 훅
-│   │       └── useIMSPlayer.ts     # IMS 플레이어 훅
+│   │       └── useAdPlugPlayer.ts  # AdPlug 플레이어 훅
 │   └── routes/                      # React Router 라우트
 │       └── home.tsx                # 메인 페이지 (SSR)
+├── wasm/                            # WASM 빌드
+│   └── adplug/                      # AdPlug 2.4 소스 및 빌드
+│       ├── src/                    # AdPlug 소스 코드
+│       └── dist/                   # 빌드된 WASM 파일
 ├── public/                          # 정적 파일
-│   ├── nuked-opl3.wasm             # Nuked-OPL3 에뮬레이터 (WASM)
-│   ├── nuked-opl3.js               # Nuked-OPL3 로더
-│   ├── nuked-wasm.js               # OPL 래퍼
+│   ├── adplug.wasm                 # AdPlug 에뮬레이터 (WASM)
+│   ├── adplug.js                   # AdPlug 로더
 │   ├── STANDARD.BNK                # 메인 악기 뱅크
 │   ├── *.IMS                       # IMS 음악 파일 (47개)
 │   ├── *.ROL                       # ROL 음악 파일 (6개)
@@ -163,26 +162,16 @@ AdLib Visual Composer에서 생성한 타임 인덱스 기반 음악 형식:
 ### 오디오 파이프라인
 
 ```
-Player.tick() → 음악 이벤트 처리
+AdPlugPlayer.generateSamples() → AdPlug WASM 호출
   ↓
-Player.generateSamples() → 샘플 생성 요청
+AdPlug (WASM) → Int16Array 스테레오 샘플 생성 (49716Hz)
   ↓
-OPLEngine.generate() → Nuked-OPL3 호출
-  ↓
-Nuked-OPL3 (WASM) → Int16Array 샘플 생성 (49716Hz)
-  ↓
-ScriptProcessorNode → Float32 변환
+AudioWorklet → Float32 변환 및 버퍼링
   ↓
 GainNode → 마스터 볼륨 적용
   ↓
 스피커 출력
 ```
-
-### 템포 계산
-
-- **ROL**: `tickDelay = 60000 / (TPB × tempo)` ms
-- **IMS**: `tickDelay = 60000 / (240 × tempo)` ms
-- PIT 타이머 주파수 (1.193182 MHz) 기반
 
 ### 서버 사이드 인코딩 처리
 
@@ -190,9 +179,10 @@ IMS 파일의 조합형 인코딩 한글 제목을 React Router v7의 SSR loader
 
 ### 성능 최적화
 
-- UI 업데이트: 10fps (100ms 인터벌)
-- 오디오 생성: Nuked-OPL3 네이티브 샘플레이트 (49716Hz)
-- 가상 스크롤링: 대용량 플레이리스트 처리
+- UI 업데이트: 20fps (50ms 인터벌)
+- 오디오 생성: AdPlug 네이티브 샘플레이트 (49716Hz)
+- AudioWorklet 기반 오디오 처리로 메인 스레드 부하 감소
+- 백그라운드 탭 전환 시 UI 프리징 방지
 
 ## 라이선스
 
