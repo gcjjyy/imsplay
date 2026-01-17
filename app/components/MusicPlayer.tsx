@@ -96,6 +96,12 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/SIDE-END.ROL", format: "ROL" },
 
   // VGM 샘플
+  { musicFile: "/Beat of The Terror.vgm", format: "VGM" },
+  { musicFile: "/First Step Toward Wars.vgm", format: "VGM" },
+  { musicFile: "/Palace of Destruction.vgm", format: "VGM" },
+  { musicFile: "/Tears of Sylph.vgm", format: "VGM" },
+  { musicFile: "/Tower of the Shadow of Death.vgm", format: "VGM" },
+  { musicFile: "/Treasure Box.vgm", format: "VGM" },
   { musicFile: "/01 Horst-Wessel-Lied.vgm", format: "VGM" },
   { musicFile: "/Wolf.vgm", format: "VGM" },
   { musicFile: "/01 Profile determination.vgm", format: "VGM" },
