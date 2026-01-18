@@ -157,7 +157,7 @@ int emu_init(int sampleRate)
 {
     // Clean up any existing state
     if (g_player) {
-        delete g_player;
+        delete g_player;  // This should close all streams via file provider
         g_player = nullptr;
     }
     if (g_opl) {
@@ -169,8 +169,8 @@ int emu_init(int sampleRate)
         g_audioBuffer = nullptr;
     }
 
-    // Clear stream buffers (fix memory leak from open() calls)
-    g_memProvider.clearBuffers();
+    // Note: Don't call clearBuffers() here - close() handles buffer cleanup
+    // Calling clearBuffers() while streams might still be open causes garbage audio
 
     // Clear file storage
     for (auto& pair : g_files) {
@@ -187,8 +187,8 @@ int emu_init(int sampleRate)
     }
     g_opl->init();
 
-    // Allocate audio buffer (stereo)
-    g_audioBuffer = new int16_t[AUDIO_BUFFER_SIZE * 2];
+    // Allocate audio buffer (stereo) - zero-initialized to prevent garbage audio
+    g_audioBuffer = new int16_t[AUDIO_BUFFER_SIZE * 2]();
     g_audioBufferLength = 0;
 
     // Reset position and timing
@@ -207,7 +207,7 @@ int emu_init(int sampleRate)
 void emu_teardown()
 {
     if (g_player) {
-        delete g_player;
+        delete g_player;  // This should close all streams via file provider
         g_player = nullptr;
     }
     if (g_opl) {
@@ -219,8 +219,7 @@ void emu_teardown()
         g_audioBuffer = nullptr;
     }
 
-    // Clear stream buffers (fix memory leak from open() calls)
-    g_memProvider.clearBuffers();
+    // Note: Don't call clearBuffers() here - close() handles buffer cleanup
 
     // Clear file storage
     for (auto& pair : g_files) {
