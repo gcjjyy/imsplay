@@ -1,13 +1,22 @@
 /**
  * useAdPlugPlayer.ts - AdPlug 통합 플레이어 React 훅
  *
- * Web Audio API (AudioWorklet)와 AdPlug WASM을 연결하는 React 훅
+ * @ain1084/audio-worklet-stream 라이브러리를 사용하여
+ * Web Audio API와 AdPlug WASM을 연결하는 React 훅
  * IMS, ROL, VGM 및 모든 AdPlug 지원 포맷을 재생
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { RefObject } from "react";
 import { AdPlugPlayer } from "../adplug/adplug";
+
+// @ain1084/audio-worklet-stream 타입 (SSR 빌드 호환성을 위해 any 사용)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type StreamNodeFactory = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OutputStreamNode = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FrameBufferWriter = any;
 
 // 기존 플레이어와 호환되는 상태 인터페이스
 export interface AdPlugPlaybackState {
@@ -50,10 +59,11 @@ interface UseAdPlugPlayerReturn {
 
   checkPlayerReady: () => boolean;
   refreshState: () => void;
-  hardReset: () => Promise<void>;  // 트랙 전환 시 완전 리셋
+  hardReset: () => Promise<void>;
 }
 
-const SAMPLE_RATE = 44100; // Standard audio sample rate
+const SAMPLE_RATE = 44100;
+const BUFFER_FRAME_COUNT = 131072; // 링 버퍼 크기 (~3초 at 44100Hz, 백그라운드 탭 throttle 대응)
 
 /**
  * AdPlug 통합 플레이어 React 훅
@@ -73,15 +83,24 @@ export function useAdPlugPlayer({
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
+  // AdPlug 플레이어
   const playerRef = useRef<AdPlugPlayer | null>(null);
+
+  // AudioContext 관련
   const localAudioContextRef = useRef<AudioContext | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+
+  // audio-worklet-stream 관련
+  const streamFactoryRef = useRef<StreamNodeFactory | null>(null);
+  const outputNodeRef = useRef<OutputStreamNode | null>(null);
+  const bufferWriterRef = useRef<FrameBufferWriter | null>(null);
+
+  // 오디오 노드
   const gainNodeRef = useRef<GainNode | null>(null);
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const fileNameRef = useRef<string>("");
-  const isVgmFileRef = useRef<boolean>(false); // VGM 파일 여부
-  const initializingRef = useRef<boolean>(false); // 초기화 진행 중 플래그 (경쟁 상태 방지)
+
+  // 초기화 상태
+  const initializingRef = useRef<boolean>(false);
 
   // 재생 상태
   const isPlayingRef = useRef<boolean>(false);
@@ -93,23 +112,16 @@ export function useAdPlugPlayer({
   // 트랙 종료 콜백 중복 호출 방지
   const trackEndCallbackFiredRef = useRef<boolean>(false);
 
-  // 백그라운드 상태
-  const wasPlayingBeforeBackgroundRef = useRef<boolean>(false);
-  const [needsAudioRecovery, setNeedsAudioRecovery] = useState<boolean>(false);
+  // 버퍼 채우기 인터벌
+  const fillIntervalRef = useRef<number | null>(null);
 
-  // 틱 동기화를 위한 시간 추적
-  const playbackStartTimeRef = useRef<number>(0);
-  const totalSamplesSentRef = useRef<number>(0); // samplesPerTick 계산용
+  // ISS 동기화용
+  const refreshRateRef = useRef<number>(70.0);
+  const totalSamplesSentRef = useRef<number>(0);
 
-  // ISS 동기화를 위한 refresh rate와 워크렛 출력 샘플 추적
-  const refreshRateRef = useRef<number>(70.0);  // 초당 틱수
-  const workletSamplesOutputRef = useRef<number>(0);  // 워크렛이 실제 출력한 샘플 수
-
-  // 워크렛 콜백에서 사용할 함수 ref (클로저 문제 방지)
-  const generateAndSendSamplesRef = useRef<() => void>(() => {});
-
-  // Float32Array 버퍼 재사용 (메모리 할당 최적화)
-  const floatBufferRef = useRef<Float32Array | null>(null);
+  // 임시 샘플 버퍼 (생성된 샘플 중 아직 쓰지 못한 부분 저장)
+  const pendingSamplesRef = useRef<Int16Array | null>(null);
+  const pendingOffsetRef = useRef<number>(0);
 
   // AudioContext 접근 헬퍼
   const getAudioContext = useCallback(() => {
@@ -124,103 +136,111 @@ export function useAdPlugPlayer({
     }
   }, [sharedAudioContextRef]);
 
-  // 디버깅: 첫 샘플 생성 카운터
-  const sampleGenerationCountRef = useRef<number>(0);
-
   /**
-   * 샘플 생성 및 워크렛으로 전송
+   * 버퍼 채우기 (샘플 생성 및 링 버퍼에 쓰기)
    */
-  const generateAndSendSamples = useCallback(() => {
-    if (!playerRef.current || !workletNodeRef.current || !isPlayingRef.current) {
+  const fillBuffer = useCallback(() => {
+    if (!playerRef.current || !bufferWriterRef.current || !isPlayingRef.current) {
       return;
     }
 
     const player = playerRef.current;
+    const writer = bufferWriterRef.current;
 
-    // 플레이어가 파일을 로드하지 않았으면 무시
     if (!player.isFileLoaded()) {
       return;
     }
 
-    const { samples, finished } = player.generateSamples();
+    const scale = 1 / 32768.0;
+    let trackFinished = false;
 
-    // 디버깅: 첫 몇 번의 샘플 생성 로그
-    sampleGenerationCountRef.current++;
-    if (sampleGenerationCountRef.current <= 5) {
-      console.log(`[DEBUG] 샘플 생성 #${sampleGenerationCountRef.current}: ${samples.length / 2} 프레임, finished=${finished}, totalSent=${totalSamplesSentRef.current}`);
-    }
+    // 버퍼에 쓸 수 있는 공간이 있는 동안 샘플 채우기
+    writer.write((segment) => {
+      let framesWritten = 0;
 
-    if (samples.length > 0) {
-      // 버퍼 재사용 (크기가 다르면 재할당)
-      if (!floatBufferRef.current || floatBufferRef.current.length !== samples.length) {
-        floatBufferRef.current = new Float32Array(samples.length);
+      while (framesWritten < segment.frameCount) {
+        // 남은 샘플이 없으면 새로 생성
+        if (!pendingSamplesRef.current || pendingOffsetRef.current >= pendingSamplesRef.current.length) {
+          const { samples, finished } = player.generateSamples();
+
+          if (samples.length === 0) {
+            break;
+          }
+
+          pendingSamplesRef.current = samples;
+          pendingOffsetRef.current = 0;
+
+          if (finished) {
+            trackFinished = true;
+          }
+        }
+
+        // 현재 세그먼트에 쓸 수 있는 프레임 수 계산
+        const pendingSamples = pendingSamplesRef.current!;
+        const remainingPendingFrames = (pendingSamples.length - pendingOffsetRef.current) / 2;
+        const remainingSegmentFrames = segment.frameCount - framesWritten;
+        const framesToCopy = Math.min(remainingPendingFrames, remainingSegmentFrames);
+
+        // 샘플 복사 (Int16 -> Float32)
+        for (let i = 0; i < framesToCopy; i++) {
+          const srcIdx = pendingOffsetRef.current + i * 2;
+          const dstFrame = framesWritten + i;
+          segment.set(dstFrame, 0, pendingSamples[srcIdx] * scale);     // Left
+          segment.set(dstFrame, 1, pendingSamples[srcIdx + 1] * scale); // Right
+        }
+
+        framesWritten += framesToCopy;
+        pendingOffsetRef.current += framesToCopy * 2;
+        totalSamplesSentRef.current += framesToCopy;
       }
 
-      // Int16 -> Float32 변환 (곱셈 사용, 나눗셈보다 빠름)
-      const scale = 1 / 32768.0;
-      const floatSamples = floatBufferRef.current;
-      for (let i = 0; i < samples.length; i++) {
-        floatSamples[i] = samples[i] * scale;
-      }
+      return framesWritten;
+    });
 
-      // 전송된 샘플 수 추적 (스테레오이므로 /2)
-      totalSamplesSentRef.current += samples.length / 2;
-
-      // 워크렛으로 전송 (복사본 전송 - Transferable로 원본 버퍼 손실 방지)
-      const transferBuffer = floatSamples.slice();
-      workletNodeRef.current.port.postMessage({
-        type: 'samples',
-        samples: transferBuffer
-      }, [transferBuffer.buffer]);
-    }
-
-    // 트랙 종료 처리 (최소 1초 이상 재생 후에만)
-    // 44100Hz에서 1초 = 44100 샘플
-    const minSamplesBeforeEnd = SAMPLE_RATE;
-    // 버퍼에 남은 샘플 수 확인 (실제 스피커 출력까지 기다림)
-    const samplesInBuffer = totalSamplesSentRef.current - workletSamplesOutputRef.current;
-    const bufferThreshold = SAMPLE_RATE * 0.05; // 50ms 이하일 때만 종료
-    if (finished && totalSamplesSentRef.current >= minSamplesBeforeEnd && samplesInBuffer <= bufferThreshold) {
+    // 트랙 종료 처리
+    if (trackFinished) {
       if (loopEnabledRef.current) {
         player.rewind();
         totalSamplesSentRef.current = 0;
-        playbackStartTimeRef.current = performance.now();
+        pendingSamplesRef.current = null;
+        pendingOffsetRef.current = 0;
         trackEndCallbackFiredRef.current = false;
       } else {
-        isPlayingRef.current = false;
-        // 시간 추적 리셋 (다음 트랙 전환 전 깨끗한 상태로)
-        playbackStartTimeRef.current = 0;
-        totalSamplesSentRef.current = 0;
-        if (!trackEndCallbackFiredRef.current && onTrackEnd) {
+        const node = outputNodeRef.current;
+        if (node && !trackEndCallbackFiredRef.current) {
           trackEndCallbackFiredRef.current = true;
-          setTimeout(() => onTrackEnd(), 0);
+          node.stop(writer.totalFrames).then(() => {
+            isPlayingRef.current = false;
+            if (onTrackEnd) {
+              setTimeout(() => onTrackEnd(), 0);
+            }
+          });
         }
       }
     }
   }, [onTrackEnd]);
 
-  // ref 업데이트 (워크렛 콜백에서 항상 최신 함수 사용)
-  useEffect(() => {
-    generateAndSendSamplesRef.current = generateAndSendSamples;
-  }, [generateAndSendSamples]);
-
   /**
-   * 샘플 생성 시작 (초기 버퍼 채우기)
-   * 이후 샘플 생성은 워크렛의 needSamples 요청에 의해 처리됨
+   * 버퍼 채우기 인터벌 시작
    */
-  const startSampleGeneration = useCallback(() => {
-    // 초기 버퍼 채우기 (32번 - 512샘플 * 32 = 16384 프레임, ~370ms at 44100Hz)
-    for (let i = 0; i < 32; i++) {
-      generateAndSendSamples();
+  const startFillInterval = useCallback(() => {
+    if (fillIntervalRef.current !== null) {
+      return;
     }
-  }, [generateAndSendSamples]);
+    // 10ms마다 버퍼 채우기 (더 자주 채워서 언더런 방지)
+    fillIntervalRef.current = window.setInterval(() => {
+      fillBuffer();
+    }, 10);
+  }, [fillBuffer]);
 
   /**
-   * 샘플 생성 중지 (워크렛 요청 무시를 위해 isPlayingRef만 확인)
+   * 버퍼 채우기 인터벌 중지
    */
-  const stopSampleGeneration = useCallback(() => {
-    // 워크렛 기반이므로 별도 정리 필요 없음
-    // isPlayingRef가 false가 되면 needSamples 요청이 무시됨
+  const stopFillInterval = useCallback(() => {
+    if (fillIntervalRef.current !== null) {
+      clearInterval(fillIntervalRef.current);
+      fillIntervalRef.current = null;
+    }
   }, []);
 
   /**
@@ -234,7 +254,6 @@ export function useAdPlugPlayer({
     let cancelled = false;
 
     const initializePlayer = async () => {
-      // 이미 초기화 중이면 건너뛰기 (경쟁 상태 방지)
       if (initializingRef.current) {
         return;
       }
@@ -243,7 +262,6 @@ export function useAdPlugPlayer({
       try {
         setIsPlayerReady(false);
         playerRef.current = null;
-        // 상태를 null로 설정하지 않고 현재 값 유지 (깜빡임 방지)
         setState(prev => prev ? {
           ...prev,
           isPlaying: false,
@@ -274,6 +292,7 @@ export function useAdPlugPlayer({
             return;
           }
           setAudioContext(null);
+          streamFactoryRef.current = null;
         }
 
         // Web Audio API 초기화
@@ -288,11 +307,11 @@ export function useAdPlugPlayer({
           return;
         }
 
-        // AudioWorklet 모듈 로드
-        try {
-          await audioContext.audioWorklet.addModule('/audio-worklet-processor.js');
-        } catch (e) {
-          // 이미 로드된 경우 무시
+        // StreamNodeFactory 생성 (처음만)
+        if (!streamFactoryRef.current) {
+          // .client.ts 모듈 사용으로 SSR 빌드에서 완전히 제외
+          const { createStreamNodeFactory } = await import("./audio-worklet-loader.client");
+          streamFactoryRef.current = await createStreamNodeFactory(audioContext);
         }
 
         if (cancelled) {
@@ -300,12 +319,12 @@ export function useAdPlugPlayer({
           return;
         }
 
-        // AdPlug 플레이어 생성 및 초기화 (실제 샘플레이트 사용)
+        // AdPlug 플레이어 생성 및 초기화
         const player = new AdPlugPlayer();
         await player.init(audioContext.sampleRate);
 
         if (cancelled) {
-          player.destroy(); // 취소된 경우 플레이어도 정리
+          player.destroy();
           initializingRef.current = false;
           return;
         }
@@ -340,61 +359,70 @@ export function useAdPlugPlayer({
         isPlayingRef.current = false;
         isPausedRef.current = false;
 
-        // Refresh rate 저장 (ISS 틱 계산용)
+        // Refresh rate 저장
         refreshRateRef.current = player.getRefreshRate();
-
-        // 샘플/시간 추적 리셋
         totalSamplesSentRef.current = 0;
-        playbackStartTimeRef.current = 0;
-        workletSamplesOutputRef.current = 0;
-        sampleGenerationCountRef.current = 0;  // 디버깅 카운터 리셋
-
-        // 트랙 종료 콜백 플래그 리셋
         trackEndCallbackFiredRef.current = false;
 
-        console.log('[DEBUG] initializePlayer() - 새 트랙 로드됨:', musicFile.name);
-
-        // 오디오 프로세서 초기화
-        await initializeAudioProcessor(audioContext);
+        // OutputStreamNode 생성
+        const [outputNode, writer] = await streamFactoryRef.current.createManualBufferNode({
+          channelCount: 2,
+          frameCount: BUFFER_FRAME_COUNT,
+        });
 
         if (cancelled) {
-          // 오디오 프로세서 초기화 후 취소된 경우 정리
-          if (workletNodeRef.current) {
-            workletNodeRef.current.port.onmessage = null;
-            try { workletNodeRef.current.port.close(); } catch (e) {}
-            try { workletNodeRef.current.disconnect(); } catch (e) {}
-            workletNodeRef.current = null;
-          }
-          if (gainNodeRef.current) {
-            try { gainNodeRef.current.disconnect(); } catch (e) {}
-            gainNodeRef.current = null;
-          }
-          if (analyserNodeRef.current) {
-            try { analyserNodeRef.current.disconnect(); } catch (e) {}
-            analyserNodeRef.current = null;
-            setAnalyserNode(null);
-          }
           player.destroy();
-          playerRef.current = null;
           initializingRef.current = false;
           return;
         }
 
+        outputNodeRef.current = outputNode;
+        bufferWriterRef.current = writer;
+
+        // GainNode 생성
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 1.0;
+        gainNodeRef.current = gainNode;
+
+        // AnalyserNode 생성
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.8;
+        analyserNodeRef.current = analyser;
+        setAnalyserNode(analyser);
+
+        // 노드 연결: OutputStreamNode -> GainNode -> Analyser
+        outputNode.connect(gainNode);
+        gainNode.connect(analyser);
+
+        // MediaStreamDestination 연결
+        if (audioElementRef?.current) {
+          try {
+            const mediaStreamDest = audioContext.createMediaStreamDestination();
+            mediaStreamDestRef.current = mediaStreamDest;
+            analyser.connect(mediaStreamDest);
+            audioElementRef.current.pause();
+            audioElementRef.current.srcObject = mediaStreamDest.stream;
+          } catch (error) {
+            console.warn('[useAdPlugPlayer] MediaStreamDestination 실패:', error);
+            analyser.connect(audioContext.destination);
+          }
+        } else {
+          analyser.connect(audioContext.destination);
+        }
+
         // 초기 상태 설정
-        fileNameRef.current = musicFile.name;
-        const lowerName = musicFile.name.toLowerCase();
-        isVgmFileRef.current = lowerName.endsWith('.vgm') || lowerName.endsWith('.vgz');
         const playerState = player.getState();
 
         setState({
           isPlaying: false,
           isPaused: false,
-          currentByte: 0,  // 항상 0부터 시작
+          currentByte: 0,
           totalSize: playerState.maxPosition || 1,
           currentTick: 0,
           volume: 100,
           tempo: 100,
-          currentTempo: 120, // 기본 BPM
+          currentTempo: 120,
           fileName: musicFile.name,
         });
 
@@ -420,119 +448,90 @@ export function useAdPlugPlayer({
   }, [musicFile, bnkFile, fileLoadKey]);
 
   /**
-   * 오디오 프로세서 초기화 (AudioWorklet)
+   * 정리 함수
    */
-  const initializeAudioProcessor = useCallback(async (audioContext: AudioContext) => {
-    // AudioWorkletNode 생성
-    const workletNode = new AudioWorkletNode(audioContext, 'adplug-processor', {
-      numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [2],
-    });
+  const cleanup = useCallback(() => {
+    isPlayingRef.current = false;
+    isPausedRef.current = false;
+    stopFillInterval();
+    totalSamplesSentRef.current = 0;
 
-    // 워크렛에서 메시지 수신 (ref 사용하여 항상 최신 함수 호출)
-    workletNode.port.onmessage = (event) => {
-      // 위치 업데이트 (주기적으로 전송됨)
-      if (event.data.type === 'position') {
-        if (event.data.samplesOutput !== undefined) {
-          workletSamplesOutputRef.current = event.data.samplesOutput;
-        }
-        return;
-      }
-
-      // 샘플 요청
-      if (event.data.type === 'needSamples' && isPlayingRef.current) {
-        // 워크렛 출력 샘플 수 업데이트 (ISS 동기화용)
-        if (event.data.samplesOutput !== undefined) {
-          workletSamplesOutputRef.current = event.data.samplesOutput;
-        }
-
-        // 버퍼가 부족하면 여러 번 생성하여 빠르게 채움
-        const frames = event.data.frames || 0;
-        const samplesToGenerate = Math.max(1, Math.ceil((16384 - frames) / 512));
-        for (let i = 0; i < samplesToGenerate; i++) {
-          generateAndSendSamplesRef.current();
-        }
-      }
-    };
-
-    // GainNode 생성
-    const gainNode = audioContext.createGain();
-    gainNode.gain.value = 1.0;
-    gainNodeRef.current = gainNode;
-
-    // AnalyserNode 생성 (스펙트럼 시각화용)
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    analyserNodeRef.current = analyser;
-    setAnalyserNode(analyser);
-
-    workletNode.connect(gainNode);
-    gainNode.connect(analyser);
-
-    // MediaStreamDestination 연결
-    if (audioElementRef?.current) {
+    // OutputStreamNode 정리
+    if (outputNodeRef.current) {
       try {
-        const mediaStreamDest = audioContext.createMediaStreamDestination();
-        mediaStreamDestRef.current = mediaStreamDest;
-        analyser.connect(mediaStreamDest);
-        audioElementRef.current.pause();
-        audioElementRef.current.srcObject = mediaStreamDest.stream;
-      } catch (error) {
-        console.warn('[useAdPlugPlayer] MediaStreamDestination 실패:', error);
-        analyser.connect(audioContext.destination);
-      }
-    } else {
-      analyser.connect(audioContext.destination);
+        outputNodeRef.current.stop().catch(() => {});
+        outputNodeRef.current.disconnect();
+      } catch (e) {}
+      outputNodeRef.current = null;
+    }
+    bufferWriterRef.current = null;
+
+    // GainNode 정리
+    if (gainNodeRef.current) {
+      try {
+        gainNodeRef.current.disconnect();
+      } catch (e) {}
+      gainNodeRef.current = null;
     }
 
-    workletNodeRef.current = workletNode;
-  }, [audioElementRef]);
+    // AnalyserNode 정리
+    if (analyserNodeRef.current) {
+      try {
+        analyserNodeRef.current.disconnect();
+      } catch (e) {}
+      analyserNodeRef.current = null;
+      setAnalyserNode(null);
+    }
+
+    // MediaStreamDestination 정리
+    if (mediaStreamDestRef.current) {
+      mediaStreamDestRef.current = null;
+    }
+
+    // 플레이어 정리
+    if (playerRef.current) {
+      playerRef.current.destroy();
+      playerRef.current = null;
+    }
+
+    initializingRef.current = false;
+  }, [stopFillInterval]);
 
   /**
-   * 실제 재생된 틱 계산 (WASM tick - 버퍼 지연)
+   * 실제 재생된 틱 계산
    */
   const getPlayedTick = useCallback(() => {
-    if (!isPlayingRef.current || !playerRef.current) return 0;
+    if (!isPlayingRef.current || !playerRef.current || !outputNodeRef.current) return 0;
 
-    // WASM의 현재 tick (생성된 샘플까지의 tick)
     const wasmTick = playerRef.current.getCurrentTick();
+    const totalRead = Number(outputNodeRef.current.totalReadFrames);
+    const totalWritten = totalSamplesSentRef.current;
 
-    // 버퍼 지연 계산: WASM에서 보낸 샘플 - 워크렛에서 출력한 샘플
-    const samplesInBuffer = totalSamplesSentRef.current - workletSamplesOutputRef.current;
-
-    // 버퍼에 남은 샘플을 tick으로 변환
+    const samplesInBuffer = Math.max(0, totalWritten - totalRead);
     const samplesPerTick = SAMPLE_RATE / refreshRateRef.current;
-    const ticksInBuffer = Math.floor(Math.max(0, samplesInBuffer) / samplesPerTick);
+    const ticksInBuffer = Math.floor(samplesInBuffer / samplesPerTick);
 
-    // 실제 재생된 tick = WASM tick - 버퍼에 남은 tick
-    const playedTick = Math.max(0, wasmTick - ticksInBuffer);
-
-    return playedTick;
+    return Math.max(0, wasmTick - ticksInBuffer);
   }, []);
 
   /**
-   * 재생된 시간 계산 (ms) - 워크렛 출력 샘플 기반
+   * 재생된 시간 계산 (ms)
    */
   const getPlayedPositionMs = useCallback(() => {
-    if (!isPlayingRef.current) {
+    if (!isPlayingRef.current || !outputNodeRef.current) {
       return 0;
     }
-    // 워크렛이 실제로 출력한 샘플 수 기준으로 시간 계산
-    const samplesOutput = workletSamplesOutputRef.current;
-    const playedMs = Math.floor((samplesOutput / SAMPLE_RATE) * 1000);
-    return playedMs;
+    const framesOutput = Number(outputNodeRef.current.totalReadFrames);
+    return Math.floor((framesOutput / SAMPLE_RATE) * 1000);
   }, []);
 
   /**
-   * 상태 갱신 (외부에서 호출)
+   * 상태 갱신
    */
   const refreshState = useCallback(() => {
     if (playerRef.current) {
       const playerState = playerRef.current.getState();
       const currentTick = getPlayedTick();
-      // WASM position 대신 경과 시간 기반으로 계산
       const currentPosition = getPlayedPositionMs();
 
       setState(prev => prev ? {
@@ -547,101 +546,15 @@ export function useAdPlugPlayer({
   }, [getPlayedTick, getPlayedPositionMs]);
 
   /**
-   * 정리 함수 (트랙 전환 시)
-   * AudioWorklet과 모든 오디오 노드를 완전히 정리하여 경쟁 상태 방지
-   */
-  const cleanup = useCallback(() => {
-    // 재생 상태 먼저 중지 (워크렛 요청 무시하도록)
-    isPlayingRef.current = false;
-    isPausedRef.current = false;
-
-    // 시간 추적 리셋 (다음 트랙에서 잘못된 시간 표시 방지)
-    playbackStartTimeRef.current = 0;
-    totalSamplesSentRef.current = 0;
-    workletSamplesOutputRef.current = 0;
-
-    stopSampleGeneration();
-
-    // AudioWorkletNode 완전 정리 (버퍼 클리어 + 연결 해제)
-    if (workletNodeRef.current) {
-      try {
-        // 버퍼 클리어 메시지 전송
-        workletNodeRef.current.port.postMessage({ type: 'clear' });
-      } catch (e) {
-        // 포트가 이미 닫힌 경우 무시
-      }
-      workletNodeRef.current.port.onmessage = null;
-      try {
-        workletNodeRef.current.port.close();
-      } catch (e) {
-        // 포트가 이미 닫힌 경우 무시
-      }
-      try {
-        workletNodeRef.current.disconnect();
-      } catch (e) {
-        // 이미 연결 해제된 경우 무시
-      }
-      workletNodeRef.current = null;
-    }
-
-    // GainNode 정리
-    if (gainNodeRef.current) {
-      try {
-        gainNodeRef.current.disconnect();
-      } catch (e) {
-        // 이미 연결 해제된 경우 무시
-      }
-      gainNodeRef.current = null;
-    }
-
-    // AnalyserNode 정리
-    if (analyserNodeRef.current) {
-      try {
-        analyserNodeRef.current.disconnect();
-      } catch (e) {
-        // 이미 연결 해제된 경우 무시
-      }
-      analyserNodeRef.current = null;
-      setAnalyserNode(null);
-    }
-
-    // MediaStreamDestination 정리
-    if (mediaStreamDestRef.current) {
-      mediaStreamDestRef.current = null;
-    }
-
-    // 플레이어 정리 (WASM 상태 리셋)
-    if (playerRef.current) {
-      playerRef.current.destroy();
-      playerRef.current = null;
-    }
-
-    // 초기화 플래그 리셋
-    initializingRef.current = false;
-  }, [stopSampleGeneration]);
-
-  /**
-   * 완전 리셋 (트랙 전환 시 모든 상태 초기화)
-   * - 시간/틱 값 리셋
-   * - UI 상태 리셋
-   * 주의: 워크렛은 initializePlayer()에서 매번 새로 생성되므로 버퍼 클리어 불필요
+   * 완전 리셋
    */
   const hardReset = useCallback(async () => {
-    // 재생 상태 즉시 중지 (needSamples 요청 무시)
     isPlayingRef.current = false;
     isPausedRef.current = false;
-
-    // 시간 추적 완전 리셋
-    playbackStartTimeRef.current = 0;
+    stopFillInterval();
     totalSamplesSentRef.current = 0;
-    workletSamplesOutputRef.current = 0;
-
-    // 트랙 종료 콜백 플래그 리셋
     trackEndCallbackFiredRef.current = false;
 
-    stopSampleGeneration();
-
-    // UI 상태 즉시 리셋
     setState(prev => prev ? {
       ...prev,
       isPlaying: false,
@@ -649,7 +562,7 @@ export function useAdPlugPlayer({
       currentByte: 0,
       currentTick: 0,
     } : null);
-  }, [stopSampleGeneration]);
+  }, [stopFillInterval]);
 
   /**
    * AudioContext resume 시도
@@ -684,48 +597,18 @@ export function useAdPlugPlayer({
     const currentContext = getAudioContext();
     if (!currentContext) return false;
 
-    if (currentContext.state === 'closed') {
-      const newAudioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-      setAudioContext(newAudioContext);
-
-      // 기존 워크렛 노드 정리
-      if (workletNodeRef.current) {
-        workletNodeRef.current.port.onmessage = null;
-        try { workletNodeRef.current.port.close(); } catch (e) {}
-        try { workletNodeRef.current.disconnect(); } catch (e) {}
-        workletNodeRef.current = null;
-      }
-      if (gainNodeRef.current) {
-        try { gainNodeRef.current.disconnect(); } catch (e) {}
-        gainNodeRef.current = null;
-      }
-      if (analyserNodeRef.current) {
-        try { analyserNodeRef.current.disconnect(); } catch (e) {}
-        analyserNodeRef.current = null;
-        setAnalyserNode(null);
-      }
-
-      await initializeAudioProcessor(newAudioContext);
-
-      if (newAudioContext.state === 'suspended') {
-        return await attemptResume(newAudioContext);
-      }
-      return true;
-    }
-
     if (currentContext.state === 'suspended') {
       return await attemptResume(currentContext);
     }
 
-    return true;
-  }, [getAudioContext, setAudioContext, initializeAudioProcessor]);
+    return currentContext.state === 'running';
+  }, [getAudioContext]);
 
   /**
    * 재생 시작
    */
   const play = useCallback(async () => {
-    // 플레이어가 준비되지 않았거나 파일이 로드되지 않았으면 무시
-    if (!playerRef.current || !getAudioContext()) {
+    if (!playerRef.current || !getAudioContext() || !outputNodeRef.current || !bufferWriterRef.current) {
       console.warn('[useAdPlugPlayer] play() 호출됨 - 플레이어 준비 안됨');
       return;
     }
@@ -753,46 +636,43 @@ export function useAdPlugPlayer({
 
     // 일시정지에서 재개하는 경우가 아니면 리셋
     if (!isPausedRef.current) {
-      // 시간 추적 완전 리셋
-      playbackStartTimeRef.current = 0;
       totalSamplesSentRef.current = 0;
-      workletSamplesOutputRef.current = 0;
       trackEndCallbackFiredRef.current = false;
-      sampleGenerationCountRef.current = 0;  // 디버깅 카운터 리셋
-
-      // 플레이어 되감기 (처음부터 시작)
+      pendingSamplesRef.current = null;
+      pendingOffsetRef.current = 0;
       playerRef.current.rewind();
-      console.log('[DEBUG] play() - rewind 완료, 샘플 생성 시작');
 
-      // UI 상태 즉시 0으로 리셋
       setState(prev => prev ? {
         ...prev,
         currentByte: 0,
         currentTick: 0,
       } : null);
+
+      // 초기 버퍼 채우기 (여러 번 호출해서 충분히 채움)
+      isPlayingRef.current = true;
+      playerRef.current.setIsPlaying(true);
+      for (let i = 0; i < 5; i++) {
+        fillBuffer();
+      }
+    } else {
+      isPlayingRef.current = true;
+      playerRef.current.setIsPlaying(true);
     }
 
-    // 샘플 생성 전에 상태 설정 (needSamples 요청 방지)
-    isPlayingRef.current = true;
     isPausedRef.current = false;
-    playerRef.current.setIsPlaying(true);
 
-    // 초기 버퍼링: 정확히 4배치 생성 (새 재생과 동일)
-    // 이 시점에서 worklet 버퍼는 비어있음
-    startSampleGeneration();
+    // 재생 시작
+    outputNodeRef.current.start();
 
-    // 버퍼링 완료 후 시간 측정 시작 (ISS 동기화의 기준점)
-    playbackStartTimeRef.current = performance.now();
+    // 버퍼 채우기 인터벌 시작
+    startFillInterval();
 
-    // 즉시 상태 업데이트
-    const playerState = playerRef.current.getState();
     setState(prev => prev ? {
       ...prev,
       isPlaying: true,
       isPaused: false,
-      currentByte: playerState.currentPosition,
     } : null);
-  }, [ensureAudioContextReady, audioElementRef, getAudioContext, startSampleGeneration]);
+  }, [ensureAudioContextReady, audioElementRef, getAudioContext, fillBuffer, startFillInterval]);
 
   /**
    * 일시정지
@@ -802,7 +682,7 @@ export function useAdPlugPlayer({
 
     isPlayingRef.current = false;
     isPausedRef.current = true;
-    stopSampleGeneration();
+    stopFillInterval();
 
     if (audioElementRef?.current && !audioElementRef.current.paused) {
       audioElementRef.current.pause();
@@ -813,7 +693,7 @@ export function useAdPlugPlayer({
       isPlaying: false,
       isPaused: true,
     } : null);
-  }, [audioElementRef, stopSampleGeneration]);
+  }, [audioElementRef, stopFillInterval]);
 
   /**
    * 정지
@@ -823,12 +703,12 @@ export function useAdPlugPlayer({
 
     isPlayingRef.current = false;
     isPausedRef.current = false;
-    stopSampleGeneration();
+    stopFillInterval();
     playerRef.current.rewind();
 
-    // 워크렛 버퍼 클리어
-    if (workletNodeRef.current) {
-      workletNodeRef.current.port.postMessage({ type: 'clear' });
+    // OutputStreamNode 정지
+    if (outputNodeRef.current) {
+      outputNodeRef.current.stop().catch(() => {});
     }
 
     if (audioElementRef?.current) {
@@ -842,17 +722,17 @@ export function useAdPlugPlayer({
       isPaused: false,
       currentByte: 0,
     } : null);
-  }, [audioElementRef, stopSampleGeneration]);
+  }, [audioElementRef, stopFillInterval]);
 
   /**
-   * 볼륨 설정 (AdPlug에서는 지원하지 않음, 호환성용)
+   * 볼륨 설정 (호환성용)
    */
   const setVolume = useCallback((volume: number) => {
     setState(prev => prev ? { ...prev, volume } : null);
   }, []);
 
   /**
-   * 템포 설정 (AdPlug에서는 지원하지 않음, 호환성용)
+   * 템포 설정 (호환성용)
    */
   const setTempo = useCallback((tempo: number) => {
     setState(prev => prev ? { ...prev, tempo } : null);
@@ -868,11 +748,10 @@ export function useAdPlugPlayer({
   }, []);
 
   /**
-   * 루프 활성화/비활성화 (WASM에도 전달하여 VGM 네이티브 루프 제어)
+   * 루프 활성화/비활성화
    */
   const setLoopEnabled = useCallback((enabled: boolean) => {
     loopEnabledRef.current = enabled;
-    // WASM에 루프 상태 전달 (VGM 네이티브 루프용)
     if (playerRef.current) {
       playerRef.current.setLoopEnabled(enabled);
     }
@@ -884,62 +763,6 @@ export function useAdPlugPlayer({
   const checkPlayerReady = useCallback(() => {
     return !!(playerRef.current && getAudioContext());
   }, [getAudioContext]);
-
-  /**
-   * Page Visibility API: 백그라운드/포그라운드 전환 처리
-   */
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!playerRef.current) return;
-
-      if (document.hidden) {
-        wasPlayingBeforeBackgroundRef.current = isPlayingRef.current;
-      } else {
-        setNeedsAudioRecovery(true);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  /**
-   * 백그라운드 복귀 시 오디오 복구
-   */
-  useEffect(() => {
-    if (!needsAudioRecovery) return;
-
-    const recoverAudio = async () => {
-      setNeedsAudioRecovery(false);
-
-      if (!playerRef.current || !getAudioContext()) return;
-
-      const recovered = await ensureAudioContextReady();
-      if (!recovered) {
-        setError('AudioContext 복구에 실패했습니다.');
-        return;
-      }
-
-      // 재생 중이었으면 상태 복구
-      if (wasPlayingBeforeBackgroundRef.current) {
-        if (audioElementRef?.current && audioElementRef.current.paused) {
-          try {
-            await audioElementRef.current.play();
-          } catch (error) {
-            console.warn('[useAdPlugPlayer] 포그라운드 복귀 시 Audio 요소 재생 실패:', error);
-          }
-        }
-
-        isPlayingRef.current = true;
-        isPausedRef.current = false;
-        startSampleGeneration();
-      }
-    };
-
-    recoverAudio();
-  }, [needsAudioRecovery, ensureAudioContextReady, audioElementRef, getAudioContext, startSampleGeneration]);
 
   return {
     state,

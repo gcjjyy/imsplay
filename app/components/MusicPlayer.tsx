@@ -907,16 +907,22 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   }, [play, pause, stop, playPreviousTrack, playNextTrack]);
 
   /**
-   * Media Session API - 액션 핸들러 등록 (한 번만)
+   * Media Session API - 액션 핸들러 등록
+   * 재생 상태가 변경될 때마다 핸들러를 재등록하여 브라우저 세션 복원 시에도 동작하도록 함
    */
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
 
-    navigator.mediaSession.setActionHandler("play", () => playRef.current?.());
-    navigator.mediaSession.setActionHandler("pause", () => pauseRef.current?.());
-    navigator.mediaSession.setActionHandler("previoustrack", () => playPreviousTrackRef.current?.());
-    navigator.mediaSession.setActionHandler("nexttrack", () => playNextTrackRefForMedia.current?.());
-    navigator.mediaSession.setActionHandler("stop", () => stopRef.current?.());
+    const registerHandlers = () => {
+      navigator.mediaSession.setActionHandler("play", () => playRef.current?.());
+      navigator.mediaSession.setActionHandler("pause", () => pauseRef.current?.());
+      navigator.mediaSession.setActionHandler("previoustrack", () => playPreviousTrackRef.current?.());
+      navigator.mediaSession.setActionHandler("nexttrack", () => playNextTrackRefForMedia.current?.());
+      navigator.mediaSession.setActionHandler("stop", () => stopRef.current?.());
+    };
+
+    // 핸들러 등록
+    registerHandlers();
 
     return () => {
       if ("mediaSession" in navigator) {
@@ -927,22 +933,24 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         navigator.mediaSession.setActionHandler("stop", null);
       }
     };
-  }, []); // 빈 의존성 - 한 번만 등록
+  }, [state?.isPlaying]); // 재생 상태 변경 시 재등록
 
   /**
    * Media Session API - 재생 상태 업데이트
+   * 음악 파일이 로드되어 있으면 "paused" 상태로 설정하여 이전/다음 버튼 활성화
    */
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
 
     if (state?.isPlaying) {
       navigator.mediaSession.playbackState = "playing";
-    } else if (state?.isPaused) {
+    } else if (state?.isPaused || currentMusicFile) {
+      // 일시정지 상태이거나 음악 파일이 로드되어 있으면 paused로 설정
       navigator.mediaSession.playbackState = "paused";
     } else {
       navigator.mediaSession.playbackState = "none";
     }
-  }, [state?.isPlaying, state?.isPaused]);
+  }, [state?.isPlaying, state?.isPaused, currentMusicFile]);
 
   /**
    * Media Session API - 메타데이터 업데이트 (트랙 변경 시에만)

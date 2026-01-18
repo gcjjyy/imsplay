@@ -12,9 +12,11 @@
     "vgm-to-ims": "tsx tools/vgm-to-ims/index.ts"
   },
   "dependencies": {
+    "@ain1084/audio-worklet-stream": "^2.0.1",
     "@malvineous/opl": "^1.0.0",
     "@react-router/node": "^7.9.2",
     "@react-router/serve": "^7.9.2",
+    "express": "^5.2.1",
     "iconv": "^3.0.1",
     "isbot": "^5.1.31",
     "lucide-react": "^0.553.0",
@@ -26,6 +28,7 @@
     "@playwright/test": "^1.57.0",
     "@react-router/dev": "^7.9.2",
     "@tailwindcss/vite": "^4.1.13",
+    "@types/express": "^5.0.6",
     "@types/iconv": "^3.0.4",
     "@types/node": "^22",
     "@types/react": "^19.1.13",

@@ -139,7 +139,7 @@ export default function LyricsDisplay({
           도움 주신 분들
         </div>
         <div style={{ marginBottom: '8px', color: 'var(--color-yellow)' }}>
-          하늘소, 피시키드, 키노피오
+          하늘소, 피시키드, 키노피오, Ospaggi
         </div>
         <div style={{ marginTop: '8px' }}>
           <a
