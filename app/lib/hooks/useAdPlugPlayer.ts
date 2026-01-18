@@ -80,7 +80,7 @@ export function useAdPlugPlayer({
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const fileNameRef = useRef<string>("");
-  const isVgmFileRef = useRef<boolean>(false); // VGM 파일 여부 (볼륨 1.5배)
+  const isVgmFileRef = useRef<boolean>(false); // VGM 파일 여부
   const initializingRef = useRef<boolean>(false); // 초기화 진행 중 플래그 (경쟁 상태 방지)
 
   // 재생 상태
@@ -446,10 +446,9 @@ export function useAdPlugPlayer({
       }
     };
 
-    // GainNode 생성 (VGM은 1.75배 볼륨)
+    // GainNode 생성
     const gainNode = audioContext.createGain();
-    const baseGain = isVgmFileRef.current ? 1.75 : 1.0;
-    gainNode.gain.value = baseGain;
+    gainNode.gain.value = 1.0;
     gainNodeRef.current = gainNode;
 
     // AnalyserNode 생성 (스펙트럼 시각화용)
@@ -848,12 +847,11 @@ export function useAdPlugPlayer({
   }, []);
 
   /**
-   * 마스터 볼륨 설정 (VGM은 1.75배 보정 적용)
+   * 마스터 볼륨 설정
    */
   const setMasterVolume = useCallback((volume: number) => {
     if (gainNodeRef.current) {
-      const baseGain = isVgmFileRef.current ? 1.75 : 1.0;
-      gainNodeRef.current.gain.value = (volume / 100) * baseGain;
+      gainNodeRef.current.gain.value = volume / 100;
     }
   }, []);
 
