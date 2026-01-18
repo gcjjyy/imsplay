@@ -423,6 +423,10 @@ export function useAdPlugPlayer({
       // 위치 업데이트 (주기적으로 전송됨)
       if (event.data.type === 'position') {
         if (event.data.samplesOutput !== undefined) {
+          // 워크렛 카운터가 리셋되면 메인 스레드 카운터도 리셋
+          if (event.data.samplesOutput < workletSamplesOutputRef.current) {
+            totalSamplesSentRef.current = event.data.samplesOutput;
+          }
           workletSamplesOutputRef.current = event.data.samplesOutput;
         }
         return;
@@ -432,6 +436,10 @@ export function useAdPlugPlayer({
       if (event.data.type === 'needSamples' && isPlayingRef.current) {
         // 워크렛 출력 샘플 수 업데이트 (ISS 동기화용)
         if (event.data.samplesOutput !== undefined) {
+          // 워크렛 카운터가 리셋되면 메인 스레드 카운터도 리셋
+          if (event.data.samplesOutput < workletSamplesOutputRef.current) {
+            totalSamplesSentRef.current = event.data.samplesOutput;
+          }
           workletSamplesOutputRef.current = event.data.samplesOutput;
         }
 
