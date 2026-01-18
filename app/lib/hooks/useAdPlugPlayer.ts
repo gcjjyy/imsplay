@@ -227,7 +227,6 @@ export function useAdPlugPlayer({
     const initializePlayer = async () => {
       // 이미 초기화 중이면 건너뛰기 (경쟁 상태 방지)
       if (initializingRef.current) {
-        console.log('[useAdPlugPlayer] 이미 초기화 중 - 건너뛰기');
         return;
       }
       initializingRef.current = true;
@@ -294,7 +293,6 @@ export function useAdPlugPlayer({
 
         // AdPlug 플레이어 생성 및 초기화 (실제 샘플레이트 사용)
         const player = new AdPlugPlayer();
-        console.log('[useAdPlugPlayer] AudioContext sampleRate:', audioContext.sampleRate);
         await player.init(audioContext.sampleRate);
 
         if (cancelled) {

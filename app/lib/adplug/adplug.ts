@@ -59,6 +59,8 @@ export interface PlaybackState {
 
 // Module loader cache
 let modulePromise: Promise<AdPlugEmscriptenModule> | null = null;
+// Track if emulator has been initialized at least once (to know if teardown is needed)
+let hasEverInitialized = false;
 
 /**
  * Load the AdPlug WASM module
@@ -129,6 +131,11 @@ export class AdPlugPlayer {
     // Load the WASM module
     this.module = await loadModule();
 
+    // 이전 상태 정리 (이전에 초기화된 적이 있을 때만)
+    if (hasEverInitialized) {
+      this.module._emu_teardown();
+    }
+
     // Initialize the emulator
     const result = this.module._emu_init(sampleRate);
     if (result !== 0) {
@@ -136,6 +143,7 @@ export class AdPlugPlayer {
     }
 
     this.isInitialized = true;
+    hasEverInitialized = true;
   }
 
   /**
@@ -373,9 +381,9 @@ export class AdPlugPlayer {
    * Clean up resources
    */
   destroy(): void {
-    if (this.module) {
-      this.module._emu_teardown();
-    }
+    // _emu_teardown()은 init()에서 처리하므로 여기서 호출하지 않음
+    // (여러 player 인스턴스가 같은 WASM 모듈을 공유하기 때문에
+    //  한 인스턴스의 destroy가 다른 인스턴스의 상태를 날릴 수 있음)
     this.isInitialized = false;
     this.fileLoaded = false;
     this.isPlaying = false;
