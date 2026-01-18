@@ -42,6 +42,9 @@ struct FileData {
 };
 static std::map<std::string, FileData> g_files;
 
+// Loop enabled flag (accessible from vgm.cpp)
+bool g_loopEnabled = false;
+
 // Convert filename to lowercase for case-insensitive matching
 static std::string toLower(const std::string& s) {
     std::string result = s;
@@ -451,6 +454,24 @@ float emu_get_refresh_rate()
     if (!g_player) return 70.0f;
     float rate = g_player->getrefresh();
     return rate > 0 ? rate : 70.0f;
+}
+
+/**
+ * Set loop enabled flag
+ * @param enabled 1 to enable loop, 0 to disable
+ */
+void emu_set_loop_enabled(int enabled)
+{
+    g_loopEnabled = (enabled != 0);
+}
+
+/**
+ * Get loop enabled flag
+ * @return 1 if loop enabled, 0 if disabled
+ */
+int emu_get_loop_enabled()
+{
+    return g_loopEnabled ? 1 : 0;
 }
 
 } // extern "C"

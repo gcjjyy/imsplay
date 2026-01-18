@@ -149,3 +149,10 @@ The audio pipeline follows this flow:
 - Korean comments used in some files - these reference original Korean DOS software
 - Binary reading offsets documented inline (e.g., "// Offset 44: TPB")
 - Port fidelity: mathematical operations match original C exactly (including integer division)
+
+## AdPlug WASM Patches
+
+When modifying AdPlug source code (in `wasm/adplug/src/`), always keep a copy of the modified files in `wasm/adplug/patches/` folder. This ensures our customizations are preserved and can be reapplied if the upstream AdPlug source is updated.
+
+Current patches:
+- `patches/vgm.cpp` - VGM loop support: modified to properly handle loop_ofs in both data end detection and CMD_DATA_END command

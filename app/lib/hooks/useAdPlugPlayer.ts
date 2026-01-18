@@ -81,6 +81,7 @@ export function useAdPlugPlayer({
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const fileNameRef = useRef<string>("");
   const isVgmFileRef = useRef<boolean>(false); // VGM 파일 여부 (볼륨 1.5배)
+  const initializingRef = useRef<boolean>(false); // 초기화 진행 중 플래그 (경쟁 상태 방지)
 
   // 재생 상태
   const isPlayingRef = useRef<boolean>(false);
@@ -224,6 +225,13 @@ export function useAdPlugPlayer({
     let cancelled = false;
 
     const initializePlayer = async () => {
+      // 이미 초기화 중이면 건너뛰기 (경쟁 상태 방지)
+      if (initializingRef.current) {
+        console.log('[useAdPlugPlayer] 이미 초기화 중 - 건너뛰기');
+        return;
+      }
+      initializingRef.current = true;
+
       try {
         setIsPlayerReady(false);
         playerRef.current = null;
@@ -240,9 +248,11 @@ export function useAdPlugPlayer({
 
         // 파일 읽기
         const musicBuffer = await musicFile.arrayBuffer();
+        if (cancelled) {
+          initializingRef.current = false;
+          return;
+        }
         const musicData = new Uint8Array(musicBuffer);
-
-        if (cancelled) return;
 
         // 강제 재로드 처리
         if (forceReloadRef?.current) {
@@ -251,26 +261,11 @@ export function useAdPlugPlayer({
           if (existingContext && existingContext.state !== 'closed') {
             await existingContext.close();
           }
+          if (cancelled) {
+            initializingRef.current = false;
+            return;
+          }
           setAudioContext(null);
-          // 워크렛도 무효화 (새 AudioContext에 연결해야 함)
-          if (workletNodeRef.current) {
-            workletNodeRef.current.port.onmessage = null;
-            workletNodeRef.current.port.close();
-            workletNodeRef.current.disconnect();
-            workletNodeRef.current = null;
-          }
-          if (gainNodeRef.current) {
-            gainNodeRef.current.disconnect();
-            gainNodeRef.current = null;
-          }
-          if (analyserNodeRef.current) {
-            analyserNodeRef.current.disconnect();
-            analyserNodeRef.current = null;
-            setAnalyserNode(null);
-          }
-          if (mediaStreamDestRef.current) {
-            mediaStreamDestRef.current = null;
-          }
         }
 
         // Web Audio API 초기화
@@ -280,6 +275,11 @@ export function useAdPlugPlayer({
           setAudioContext(audioContext);
         }
 
+        if (cancelled) {
+          initializingRef.current = false;
+          return;
+        }
+
         // AudioWorklet 모듈 로드
         try {
           await audioContext.audioWorklet.addModule('/audio-worklet-processor.js');
@@ -287,16 +287,30 @@ export function useAdPlugPlayer({
           // 이미 로드된 경우 무시
         }
 
+        if (cancelled) {
+          initializingRef.current = false;
+          return;
+        }
+
         // AdPlug 플레이어 생성 및 초기화 (실제 샘플레이트 사용)
         const player = new AdPlugPlayer();
         console.log('[useAdPlugPlayer] AudioContext sampleRate:', audioContext.sampleRate);
         await player.init(audioContext.sampleRate);
 
-        if (cancelled) return;
+        if (cancelled) {
+          player.destroy(); // 취소된 경우 플레이어도 정리
+          initializingRef.current = false;
+          return;
+        }
 
         // BNK 파일 추가 (있는 경우)
         if (bnkFile) {
           const bnkBuffer = await bnkFile.arrayBuffer();
+          if (cancelled) {
+            player.destroy();
+            initializingRef.current = false;
+            return;
+          }
           const bnkData = new Uint8Array(bnkBuffer);
           player.addFile(bnkFile.name, bnkData);
         }
@@ -304,10 +318,16 @@ export function useAdPlugPlayer({
         // 음악 파일 로드
         const loaded = player.load(musicFile.name, musicData);
         if (!loaded) {
+          player.destroy();
+          initializingRef.current = false;
           throw new Error("Failed to load music file. Format may not be supported.");
         }
 
-        if (cancelled) return;
+        if (cancelled) {
+          player.destroy();
+          initializingRef.current = false;
+          return;
+        }
 
         playerRef.current = player;
         isPlayingRef.current = false;
@@ -324,26 +344,31 @@ export function useAdPlugPlayer({
         // 트랙 종료 콜백 플래그 리셋
         trackEndCallbackFiredRef.current = false;
 
-        // 오디오 프로세서 초기화 (매번 새로 생성하여 클린한 상태 보장)
-        if (workletNodeRef.current) {
-          workletNodeRef.current.port.onmessage = null;  // 핸들러 제거
-          workletNodeRef.current.port.close();  // 메시지 포트 종료
-          workletNodeRef.current.disconnect();
-          workletNodeRef.current = null;
-        }
-        if (gainNodeRef.current) {
-          gainNodeRef.current.disconnect();
-          gainNodeRef.current = null;
-        }
-        if (analyserNodeRef.current) {
-          analyserNodeRef.current.disconnect();
-          analyserNodeRef.current = null;
-          setAnalyserNode(null);
-        }
-        if (mediaStreamDestRef.current) {
-          mediaStreamDestRef.current = null;
-        }
+        // 오디오 프로세서 초기화
         await initializeAudioProcessor(audioContext);
+
+        if (cancelled) {
+          // 오디오 프로세서 초기화 후 취소된 경우 정리
+          if (workletNodeRef.current) {
+            workletNodeRef.current.port.onmessage = null;
+            try { workletNodeRef.current.port.close(); } catch (e) {}
+            try { workletNodeRef.current.disconnect(); } catch (e) {}
+            workletNodeRef.current = null;
+          }
+          if (gainNodeRef.current) {
+            try { gainNodeRef.current.disconnect(); } catch (e) {}
+            gainNodeRef.current = null;
+          }
+          if (analyserNodeRef.current) {
+            try { analyserNodeRef.current.disconnect(); } catch (e) {}
+            analyserNodeRef.current = null;
+            setAnalyserNode(null);
+          }
+          player.destroy();
+          playerRef.current = null;
+          initializingRef.current = false;
+          return;
+        }
 
         // 초기 상태 설정
         fileNameRef.current = musicFile.name;
@@ -365,7 +390,9 @@ export function useAdPlugPlayer({
 
         setIsPlayerReady(true);
         setIsLoading(false);
+        initializingRef.current = false;
       } catch (err) {
+        initializingRef.current = false;
         if (!cancelled) {
           console.error('[useAdPlugPlayer] 에러:', err);
           setError(err instanceof Error ? err.message : "Unknown error");
@@ -511,8 +538,8 @@ export function useAdPlugPlayer({
   }, [getPlayedTick, getPlayedPositionMs]);
 
   /**
-   * 정리 함수 (트랙 전환 시 - 오디오 노드는 유지)
-   * 버퍼 클리어는 hardReset()에서 처리하므로 여기서는 하지 않음
+   * 정리 함수 (트랙 전환 시)
+   * AudioWorklet과 모든 오디오 노드를 완전히 정리하여 경쟁 상태 방지
    */
   const cleanup = useCallback(() => {
     // 재생 상태 먼저 중지 (워크렛 요청 무시하도록)
@@ -522,14 +549,66 @@ export function useAdPlugPlayer({
     // 시간 추적 리셋 (다음 트랙에서 잘못된 시간 표시 방지)
     playbackStartTimeRef.current = 0;
     totalSamplesSentRef.current = 0;
+    workletSamplesOutputRef.current = 0;
 
     stopSampleGeneration();
 
-    // 플레이어만 정리 (WASM 상태 리셋)
+    // AudioWorkletNode 완전 정리 (버퍼 클리어 + 연결 해제)
+    if (workletNodeRef.current) {
+      try {
+        // 버퍼 클리어 메시지 전송
+        workletNodeRef.current.port.postMessage({ type: 'clear' });
+      } catch (e) {
+        // 포트가 이미 닫힌 경우 무시
+      }
+      workletNodeRef.current.port.onmessage = null;
+      try {
+        workletNodeRef.current.port.close();
+      } catch (e) {
+        // 포트가 이미 닫힌 경우 무시
+      }
+      try {
+        workletNodeRef.current.disconnect();
+      } catch (e) {
+        // 이미 연결 해제된 경우 무시
+      }
+      workletNodeRef.current = null;
+    }
+
+    // GainNode 정리
+    if (gainNodeRef.current) {
+      try {
+        gainNodeRef.current.disconnect();
+      } catch (e) {
+        // 이미 연결 해제된 경우 무시
+      }
+      gainNodeRef.current = null;
+    }
+
+    // AnalyserNode 정리
+    if (analyserNodeRef.current) {
+      try {
+        analyserNodeRef.current.disconnect();
+      } catch (e) {
+        // 이미 연결 해제된 경우 무시
+      }
+      analyserNodeRef.current = null;
+      setAnalyserNode(null);
+    }
+
+    // MediaStreamDestination 정리
+    if (mediaStreamDestRef.current) {
+      mediaStreamDestRef.current = null;
+    }
+
+    // 플레이어 정리 (WASM 상태 리셋)
     if (playerRef.current) {
       playerRef.current.destroy();
       playerRef.current = null;
     }
+
+    // 초기화 플래그 리셋
+    initializingRef.current = false;
   }, [stopSampleGeneration]);
 
   /**
@@ -600,12 +679,23 @@ export function useAdPlugPlayer({
       const newAudioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
       setAudioContext(newAudioContext);
 
+      // 기존 워크렛 노드 정리
       if (workletNodeRef.current) {
         workletNodeRef.current.port.onmessage = null;
-        workletNodeRef.current.port.close();
-        workletNodeRef.current.disconnect();
+        try { workletNodeRef.current.port.close(); } catch (e) {}
+        try { workletNodeRef.current.disconnect(); } catch (e) {}
         workletNodeRef.current = null;
       }
+      if (gainNodeRef.current) {
+        try { gainNodeRef.current.disconnect(); } catch (e) {}
+        gainNodeRef.current = null;
+      }
+      if (analyserNodeRef.current) {
+        try { analyserNodeRef.current.disconnect(); } catch (e) {}
+        analyserNodeRef.current = null;
+        setAnalyserNode(null);
+      }
+
       await initializeAudioProcessor(newAudioContext);
 
       if (newAudioContext.state === 'suspended') {
@@ -768,10 +858,14 @@ export function useAdPlugPlayer({
   }, []);
 
   /**
-   * 루프 활성화/비활성화
+   * 루프 활성화/비활성화 (WASM에도 전달하여 VGM 네이티브 루프 제어)
    */
   const setLoopEnabled = useCallback((enabled: boolean) => {
     loopEnabledRef.current = enabled;
+    // WASM에 루프 상태 전달 (VGM 네이티브 루프용)
+    if (playerRef.current) {
+      playerRef.current.setLoopEnabled(enabled);
+    }
   }, []);
 
   /**

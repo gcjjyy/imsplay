@@ -83,7 +83,7 @@ emcc -O3 \
     -s WASM=1 \
     -s MODULARIZE=1 \
     -s EXPORT_NAME="AdPlugModule" \
-    -s EXPORTED_FUNCTIONS="['_malloc','_free','_emu_init','_emu_teardown','_emu_add_file','_emu_load_file','_emu_compute_audio_samples','_emu_get_audio_buffer','_emu_get_audio_buffer_length','_emu_get_current_position','_emu_get_max_position','_emu_seek_position','_emu_get_track_info','_emu_get_subsong_count','_emu_set_subsong','_emu_get_sample_rate','_emu_rewind','_emu_get_current_tick','_emu_get_refresh_rate']" \
+    -s EXPORTED_FUNCTIONS="['_malloc','_free','_emu_init','_emu_teardown','_emu_add_file','_emu_load_file','_emu_compute_audio_samples','_emu_get_audio_buffer','_emu_get_audio_buffer_length','_emu_get_current_position','_emu_get_max_position','_emu_seek_position','_emu_get_track_info','_emu_get_subsong_count','_emu_set_subsong','_emu_get_sample_rate','_emu_rewind','_emu_get_current_tick','_emu_get_refresh_rate','_emu_set_loop_enabled','_emu_get_loop_enabled']" \
     -s EXPORTED_RUNTIME_METHODS="['ccall','cwrap','UTF8ToString','stringToUTF8','getValue','setValue','HEAPU8','HEAP16','HEAP32']" \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s INITIAL_MEMORY=16777216 \

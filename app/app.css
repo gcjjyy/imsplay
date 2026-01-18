@@ -872,6 +872,12 @@ body {
     background: #4a5568;
   }
 
+  /* 프로그레스바 텍스트 - 흰색 고정 */
+  .dos-progress-text {
+    color: #ffffff;
+    mix-blend-mode: normal;
+  }
+
   /* 버튼 스타일 */
   .dos-button {
     color: #f4f4f5;

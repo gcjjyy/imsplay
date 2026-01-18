@@ -26,6 +26,8 @@ interface AdPlugEmscriptenModule {
   _emu_rewind(): void;
   _emu_get_current_tick(): number;
   _emu_get_refresh_rate(): number;
+  _emu_set_loop_enabled(enabled: number): void;
+  _emu_get_loop_enabled(): number;
 
   HEAP8: Int8Array;
   HEAP16: Int16Array;
@@ -346,6 +348,25 @@ export class AdPlugPlayer {
    */
   isFileLoaded(): boolean {
     return this.fileLoaded;
+  }
+
+  /**
+   * Set loop enabled flag (for VGM native loop support)
+   */
+  setLoopEnabled(enabled: boolean): void {
+    if (this.module) {
+      this.module._emu_set_loop_enabled(enabled ? 1 : 0);
+    }
+  }
+
+  /**
+   * Get loop enabled flag
+   */
+  getLoopEnabled(): boolean {
+    if (!this.module) {
+      return false;
+    }
+    return this.module._emu_get_loop_enabled() !== 0;
   }
 
   /**
