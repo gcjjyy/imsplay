@@ -124,6 +124,9 @@ export function useAdPlugPlayer({
     }
   }, [sharedAudioContextRef]);
 
+  // 디버깅: 첫 샘플 생성 카운터
+  const sampleGenerationCountRef = useRef<number>(0);
+
   /**
    * 샘플 생성 및 워크렛으로 전송
    */
@@ -140,6 +143,12 @@ export function useAdPlugPlayer({
     }
 
     const { samples, finished } = player.generateSamples();
+
+    // 디버깅: 첫 몇 번의 샘플 생성 로그
+    sampleGenerationCountRef.current++;
+    if (sampleGenerationCountRef.current <= 5) {
+      console.log(`[DEBUG] 샘플 생성 #${sampleGenerationCountRef.current}: ${samples.length / 2} 프레임, finished=${finished}, totalSent=${totalSamplesSentRef.current}`);
+    }
 
     if (samples.length > 0) {
       // 버퍼 재사용 (크기가 다르면 재할당)
@@ -338,9 +347,12 @@ export function useAdPlugPlayer({
         totalSamplesSentRef.current = 0;
         playbackStartTimeRef.current = 0;
         workletSamplesOutputRef.current = 0;
+        sampleGenerationCountRef.current = 0;  // 디버깅 카운터 리셋
 
         // 트랙 종료 콜백 플래그 리셋
         trackEndCallbackFiredRef.current = false;
+
+        console.log('[DEBUG] initializePlayer() - 새 트랙 로드됨:', musicFile.name);
 
         // 오디오 프로세서 초기화
         await initializeAudioProcessor(audioContext);
@@ -423,10 +435,6 @@ export function useAdPlugPlayer({
       // 위치 업데이트 (주기적으로 전송됨)
       if (event.data.type === 'position') {
         if (event.data.samplesOutput !== undefined) {
-          // 워크렛 카운터가 리셋되면 메인 스레드 카운터도 리셋
-          if (event.data.samplesOutput < workletSamplesOutputRef.current) {
-            totalSamplesSentRef.current = event.data.samplesOutput;
-          }
           workletSamplesOutputRef.current = event.data.samplesOutput;
         }
         return;
@@ -436,10 +444,6 @@ export function useAdPlugPlayer({
       if (event.data.type === 'needSamples' && isPlayingRef.current) {
         // 워크렛 출력 샘플 수 업데이트 (ISS 동기화용)
         if (event.data.samplesOutput !== undefined) {
-          // 워크렛 카운터가 리셋되면 메인 스레드 카운터도 리셋
-          if (event.data.samplesOutput < workletSamplesOutputRef.current) {
-            totalSamplesSentRef.current = event.data.samplesOutput;
-          }
           workletSamplesOutputRef.current = event.data.samplesOutput;
         }
 
@@ -754,9 +758,11 @@ export function useAdPlugPlayer({
       totalSamplesSentRef.current = 0;
       workletSamplesOutputRef.current = 0;
       trackEndCallbackFiredRef.current = false;
+      sampleGenerationCountRef.current = 0;  // 디버깅 카운터 리셋
 
       // 플레이어 되감기 (처음부터 시작)
       playerRef.current.rewind();
+      console.log('[DEBUG] play() - rewind 완료, 샘플 생성 시작');
 
       // UI 상태 즉시 0으로 리셋
       setState(prev => prev ? {

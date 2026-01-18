@@ -17,30 +17,33 @@ class AdPlugProcessor extends AudioWorkletProcessor {
     this.totalSamplesOutput = 0;  // 총 출력 샘플 수 (ISS 동기화용)
     this.lastPositionUpdate = 0;  // 마지막 위치 업데이트 시점
 
+    // 디버깅: 받은 샘플 배치 카운터
+    this.receivedBatchCount = 0;
+
     // Receive samples from main thread
     this.port.onmessage = (event) => {
       if (event.data.type === 'samples') {
-        // 큐 크기 제한 (최대 2초 분량 = 88200 프레임)
-        // 너무 많이 쌓이면 오래된 것 버림 (메모리 누수 방지)
-        const MAX_QUEUE_FRAMES = 88200;
-        if (this.totalQueuedFrames > MAX_QUEUE_FRAMES) {
-          // 큐가 너무 크면 새 샘플 무시 (이미 충분함)
-          return;
-        }
-
         // 큐에 추가 (복사해서 저장)
         const samples = new Float32Array(event.data.samples);
         this.sampleQueue.push(samples);
         // O(1)로 프레임 수 업데이트
         this.totalQueuedFrames += samples.length / 2;
+
+        // 디버깅: 첫 몇 번의 샘플 수신 로그
+        this.receivedBatchCount++;
+        if (this.receivedBatchCount <= 5) {
+          console.log(`[DEBUG Worklet] 샘플 수신 #${this.receivedBatchCount}: ${samples.length / 2} 프레임, 큐 크기=${this.totalQueuedFrames}`);
+        }
       } else if (event.data.type === 'clear') {
         // Clear buffer
+        console.log('[DEBUG Worklet] 버퍼 클리어 요청');
         this.sampleQueue = [];
         this.totalQueuedFrames = 0;
         this.currentBuffer = null;
         this.currentOffset = 0;
         this.totalSamplesOutput = 0;
         this.lastPositionUpdate = 0;
+        this.receivedBatchCount = 0;  // 디버깅 카운터 리셋
         // 클리어 완료 알림
         this.port.postMessage({ type: 'cleared' });
       }
@@ -80,13 +83,6 @@ class AdPlugProcessor extends AudioWorkletProcessor {
       outputR[i] = this.currentBuffer[this.currentOffset + 1];
       this.currentOffset += 2;
       this.totalSamplesOutput++;  // 프레임 카운트 (샘플 쌍)
-
-      // 카운터 오버플로우 방지 (약 6시간마다 리셋)
-      // Number.MAX_SAFE_INTEGER에 도달하기 전에 리셋
-      if (this.totalSamplesOutput > 1000000000) {
-        this.totalSamplesOutput = 0;
-        this.lastPositionUpdate = 0;
-      }
     }
 
     // 큐가 거의 비었으면 더 요청 (O(1) 추적 변수 사용)

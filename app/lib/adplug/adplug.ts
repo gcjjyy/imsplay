@@ -121,7 +121,6 @@ export class AdPlugPlayer {
   private currentSubsong = 0;
   private sampleRate = 49716;
   private fileLoaded = false;
-  private sampleBuffer: Int16Array | null = null; // 버퍼 재사용으로 메모리 할당 최소화
 
   /**
    * Initialize the player with specified sample rate
@@ -229,20 +228,16 @@ export class AdPlugPlayer {
     // Calculate number of samples (buffer is in bytes, each sample is 2 bytes)
     const numSamples = bufferLength / 2;
 
-    // 버퍼 재사용 (크기가 다르면 재할당)
-    if (!this.sampleBuffer || this.sampleBuffer.length !== numSamples) {
-      this.sampleBuffer = new Int16Array(numSamples);
-    }
-
     // Copy samples from WASM memory
+    const samples = new Int16Array(numSamples);
     const startOffset = bufferPtr / 2; // Convert byte offset to Int16 offset
-    this.sampleBuffer.set(this.module.HEAP16.subarray(startOffset, startOffset + numSamples));
+    samples.set(this.module.HEAP16.subarray(startOffset, startOffset + numSamples));
 
     if (finished) {
       this.isPlaying = false;
     }
 
-    return { samples: this.sampleBuffer, finished };
+    return { samples, finished };
   }
 
   /**
@@ -392,7 +387,6 @@ export class AdPlugPlayer {
     this.isInitialized = false;
     this.fileLoaded = false;
     this.isPlaying = false;
-    this.sampleBuffer = null; // 메모리 해제
   }
 }
 
