@@ -66,8 +66,13 @@ static std::string getFilename(const std::string& path) {
 }
 
 // Memory file provider for loading from buffer
+// Tracks allocated buffers to properly free them in close()
 class CProvider_Memory : public CFileProvider
 {
+private:
+    // Map from binistream pointer to its data buffer for proper cleanup
+    mutable std::map<binistream*, uint8_t*> m_streamBuffers;
+
 public:
     CProvider_Memory() {}
 
@@ -98,14 +103,34 @@ public:
         // Create a copy of the data for the stream
         uint8_t* dataCopy = new uint8_t[it->second.size];
         memcpy(dataCopy, it->second.data, it->second.size);
-        return new binisstream(dataCopy, it->second.size);
+        binistream* stream = new binisstream(dataCopy, it->second.size);
+
+        // Track the buffer so we can free it in close()
+        m_streamBuffers[stream] = dataCopy;
+
+        return stream;
     }
 
     virtual void close(binistream* f) const override
     {
         if (f) {
+            // Free the data buffer associated with this stream
+            auto it = m_streamBuffers.find(f);
+            if (it != m_streamBuffers.end()) {
+                delete[] it->second;
+                m_streamBuffers.erase(it);
+            }
             delete f;
         }
+    }
+
+    // Clean up any remaining buffers (called during teardown)
+    void clearBuffers()
+    {
+        for (auto& pair : m_streamBuffers) {
+            delete[] pair.second;
+        }
+        m_streamBuffers.clear();
     }
 };
 
@@ -143,6 +168,9 @@ int emu_init(int sampleRate)
         delete[] g_audioBuffer;
         g_audioBuffer = nullptr;
     }
+
+    // Clear stream buffers (fix memory leak from open() calls)
+    g_memProvider.clearBuffers();
 
     // Clear file storage
     for (auto& pair : g_files) {
@@ -190,6 +218,9 @@ void emu_teardown()
         delete[] g_audioBuffer;
         g_audioBuffer = nullptr;
     }
+
+    // Clear stream buffers (fix memory leak from open() calls)
+    g_memProvider.clearBuffers();
 
     // Clear file storage
     for (auto& pair : g_files) {
