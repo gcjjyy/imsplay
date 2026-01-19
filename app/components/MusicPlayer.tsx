@@ -141,7 +141,6 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   // Tracker 샘플 - Demoscene Classics (libopenmpt)
   { musicFile: "/skyrider.s3m", format: "S3M" },
   { musicFile: "/satellite_one.s3m", format: "S3M" },
-  { musicFile: "/unreal2.s3m", format: "S3M" },
   { musicFile: "/celestial_fantasia.s3m", format: "S3M" },
   { musicFile: "/dead_lock.xm", format: "XM" },
   { musicFile: "/space_debris.mod", format: "MOD" },
