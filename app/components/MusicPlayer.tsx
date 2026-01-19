@@ -139,18 +139,18 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/18 Tyrian, The Level.vgm", format: "VGM" },
 
   // Tracker 샘플 - Demoscene Classics (libopenmpt)
-  { musicFile: "/skyrider.s3m", format: "S3M", title: "Purple Motion - Skyrider" },
-  { musicFile: "/satellite_one.s3m", format: "S3M", title: "Purple Motion - Satellite One" },
-  { musicFile: "/unreal2.s3m", format: "S3M", title: "Purple Motion - Unreal II (Second Reality)" },
-  { musicFile: "/celestial_fantasia.s3m", format: "S3M", title: "BeaT / Osmosys - Celestial Fantasia" },
-  { musicFile: "/dead_lock.xm", format: "XM", title: "Elwood - Dead Lock" },
-  { musicFile: "/space_debris.mod", format: "MOD", title: "Captain / Image - Space Debris" },
-  { musicFile: "/unreeeal_superhero_3.xm", format: "XM", title: "Rez & Kenet - Unreeeal Superhero 3" },
-  { musicFile: "/point_of_departure.s3m", format: "S3M", title: "Necros - Point of Departure" },
-  { musicFile: "/astraying_voyages.s3m", format: "S3M", title: "Purple Motion - Astraying Voyages" },
-  { musicFile: "/crystal_dream.s3m", format: "S3M", title: "Triton - Crystal Dream II" },
-  { musicFile: "/axel_f.mod", format: "MOD", title: "Audiomonster - Axel F (Remix)" },
-  { musicFile: "/path_to_nowhere.xm", format: "XM", title: "Anvil - Path to Nowhere" },
+  { musicFile: "/skyrider.s3m", format: "S3M" },
+  { musicFile: "/satellite_one.s3m", format: "S3M" },
+  { musicFile: "/unreal2.s3m", format: "S3M" },
+  { musicFile: "/celestial_fantasia.s3m", format: "S3M" },
+  { musicFile: "/dead_lock.xm", format: "XM" },
+  { musicFile: "/space_debris.mod", format: "MOD" },
+  { musicFile: "/unreeeal_superhero_3.xm", format: "XM" },
+  { musicFile: "/point_of_departure.s3m", format: "S3M" },
+  { musicFile: "/astraying_voyages.s3m", format: "S3M" },
+  { musicFile: "/crystal_dream.s3m", format: "S3M" },
+  { musicFile: "/axel_f.mod", format: "MOD" },
+  { musicFile: "/path_to_nowhere.xm", format: "XM" },
 ];
 
 const BNK_FILE = "/STANDARD.BNK";
