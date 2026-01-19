@@ -691,11 +691,16 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         newFileName = sample?.musicFile.split("/").pop();
       }
 
-      // 플레이어 타입이 변경되면 forceReload 설정 (sample rate 차이 대응)
+      // 플레이어 타입이 변경되면 AudioContext를 미리 정리 (sample rate 차이 대응)
       if (newFileName) {
         const newPlayerType = getPlayerType(newFileName);
         if (playerType !== null && newPlayerType !== null && playerType !== newPlayerType) {
-          forceReloadRef.current = true;
+          // 기존 AudioContext 정리 (새 플레이어가 올바른 sampleRate로 생성하도록)
+          const existingContext = sharedAudioContextRef.current;
+          if (existingContext && existingContext.state !== 'closed') {
+            await existingContext.close();
+          }
+          sharedAudioContextRef.current = null;
         }
       }
 
