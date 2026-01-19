@@ -17,6 +17,10 @@
 // Audio buffer size (samples per channel)
 static const int AUDIO_BUFFER_SIZE = 512;
 
+// Fixed-point arithmetic constants (16-bit fractional precision)
+static const int FIXED_POINT_SHIFT = 16;
+static const uint64_t FIXED_POINT_ONE = 1ULL << FIXED_POINT_SHIFT;
+
 // Global state
 static CNemuopl* g_opl = nullptr;
 static CPlayer* g_player = nullptr;
@@ -25,7 +29,7 @@ static int16_t* g_audioBuffer = nullptr;
 static int g_audioBufferLength = 0;
 static unsigned long g_currentPosition = 0;
 static unsigned long g_maxPosition = 0;
-static double g_sampleAccumulator = 0.0;
+static uint64_t g_sampleAccumulatorFixed = 0;  // Fixed-point accumulator
 static unsigned long g_totalSamplesGenerated = 0;
 static unsigned long g_currentTick = 0; // ISS 가사 동기화용 틱 카운터
 
@@ -136,14 +140,18 @@ public:
 
 static CProvider_Memory g_memProvider;
 
-// Helper to calculate samples per tick
-static double getSamplesPerTick()
+// Helper to calculate samples per tick in fixed-point format
+// Returns (sampleRate / refreshRate) * FIXED_POINT_ONE
+static uint64_t getSamplesPerTickFixed()
 {
     if (!g_player) return 0;
     double refreshRate = g_player->getrefresh();
     if (refreshRate <= 0) refreshRate = 70.0; // Default
 
-    return static_cast<double>(g_sampleRate) / refreshRate;
+    // Calculate in double, then convert to fixed-point once
+    // This single conversion is precise; the accumulation uses integer math
+    double samplesPerTick = static_cast<double>(g_sampleRate) / refreshRate;
+    return static_cast<uint64_t>(samplesPerTick * FIXED_POINT_ONE);
 }
 
 extern "C" {
@@ -194,7 +202,7 @@ int emu_init(int sampleRate)
     // Reset position and timing
     g_currentPosition = 0;
     g_maxPosition = 0;
-    g_sampleAccumulator = 0.0f;
+    g_sampleAccumulatorFixed = 0;
     g_totalSamplesGenerated = 0;
     g_currentTick = 0;
 
@@ -284,7 +292,7 @@ int emu_load_file(const char* filename, const uint8_t* data, int size)
     g_opl->init();
 
     // Reset timing state
-    g_sampleAccumulator = 0.0f;
+    g_sampleAccumulatorFixed = 0;
     g_totalSamplesGenerated = 0;
     g_currentTick = 0;
 
@@ -315,6 +323,7 @@ int emu_load_file(const char* filename, const uint8_t* data, int size)
 /**
  * Generate audio samples
  * Fills the audio buffer with generated samples
+ * Uses fixed-point arithmetic to avoid floating-point precision drift
  * @return 0 while playing, 1 when song ends
  */
 int emu_compute_audio_samples()
@@ -327,8 +336,8 @@ int emu_compute_audio_samples()
     int maxSamples = AUDIO_BUFFER_SIZE;
 
     while (samplesGenerated < maxSamples) {
-        // Generate samples for current tick
-        int samplesToGenerate = static_cast<int>(g_sampleAccumulator);
+        // Generate samples for current tick (extract integer part from fixed-point)
+        int samplesToGenerate = static_cast<int>(g_sampleAccumulatorFixed >> FIXED_POINT_SHIFT);
         if (samplesToGenerate > 0) {
             int remaining = maxSamples - samplesGenerated;
             int toGenerate = samplesToGenerate < remaining ? samplesToGenerate : remaining;
@@ -337,7 +346,8 @@ int emu_compute_audio_samples()
             g_opl->update(&g_audioBuffer[samplesGenerated * 2], toGenerate);
 
             samplesGenerated += toGenerate;
-            g_sampleAccumulator -= static_cast<double>(toGenerate);
+            // Subtract using fixed-point (toGenerate << FIXED_POINT_SHIFT)
+            g_sampleAccumulatorFixed -= (static_cast<uint64_t>(toGenerate) << FIXED_POINT_SHIFT);
         }
 
         // Process next tick
@@ -352,8 +362,8 @@ int emu_compute_audio_samples()
             }
 
             // Get samples per tick AFTER update (refresh rate may change)
-            float samplesPerTick = getSamplesPerTick();
-            g_sampleAccumulator += samplesPerTick;
+            // Integer addition - no precision loss
+            g_sampleAccumulatorFixed += getSamplesPerTickFixed();
         }
     }
 
@@ -461,7 +471,7 @@ void emu_rewind()
         g_player->rewind(-1);
         g_currentPosition = 0;
         g_currentTick = 0;
-        g_sampleAccumulator = 0.0f;
+        g_sampleAccumulatorFixed = 0;
         g_totalSamplesGenerated = 0;
     }
 }
