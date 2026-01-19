@@ -325,6 +325,10 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   // 공유 AudioContext (IMS/ROL 플레이어 간 공유 - Safari autoplay 정책 준수)
   const sharedAudioContextRef = useRef<AudioContext | null>(null);
 
+  // 공유 StreamNodeFactory (AudioWorklet 중복 등록 방지)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sharedStreamFactoryRef = useRef<any>(null);
+
   // Media Session API용 Audio 요소 (srcObject로 MediaStream 연결)
   const audioElementRef = useRef<HTMLAudioElement>(null);
 
@@ -360,6 +364,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     forceReloadRef,
     onTrackEnd: handleTrackEnd,
     sharedAudioContextRef,
+    sharedStreamFactoryRef,
     audioElementRef,
   });
 
@@ -370,6 +375,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     forceReloadRef,
     onTrackEnd: handleTrackEnd,
     sharedAudioContextRef,
+    sharedStreamFactoryRef,
     audioElementRef,
   });
 

@@ -38,6 +38,7 @@ interface UseAdPlugPlayerOptions {
   forceReloadRef?: RefObject<boolean>;
   onTrackEnd?: () => void;
   sharedAudioContextRef?: RefObject<AudioContext | null>;
+  sharedStreamFactoryRef?: RefObject<StreamNodeFactory | null>;
   audioElementRef?: RefObject<HTMLAudioElement | null>;
 }
 
@@ -75,6 +76,7 @@ export function useAdPlugPlayer({
   forceReloadRef,
   onTrackEnd,
   sharedAudioContextRef,
+  sharedStreamFactoryRef,
   audioElementRef,
 }: UseAdPlugPlayerOptions): UseAdPlugPlayerReturn {
   const [state, setState] = useState<AdPlugPlaybackState | null>(null);
@@ -89,8 +91,8 @@ export function useAdPlugPlayer({
   // AudioContext 관련
   const localAudioContextRef = useRef<AudioContext | null>(null);
 
-  // audio-worklet-stream 관련
-  const streamFactoryRef = useRef<StreamNodeFactory | null>(null);
+  // audio-worklet-stream 관련 (로컬 fallback)
+  const localStreamFactoryRef = useRef<StreamNodeFactory | null>(null);
   const streamFactoryContextRef = useRef<AudioContext | null>(null); // factory가 생성된 context 추적
   const outputNodeRef = useRef<OutputStreamNode | null>(null);
   const bufferWriterRef = useRef<FrameBufferWriter | null>(null);
@@ -136,6 +138,19 @@ export function useAdPlugPlayer({
       localAudioContextRef.current = ctx;
     }
   }, [sharedAudioContextRef]);
+
+  // StreamFactory 접근 헬퍼 (공유 우선, 로컬 fallback)
+  const getStreamFactory = useCallback(() => {
+    return sharedStreamFactoryRef?.current ?? localStreamFactoryRef.current;
+  }, [sharedStreamFactoryRef]);
+
+  const setStreamFactory = useCallback((factory: StreamNodeFactory | null) => {
+    if (sharedStreamFactoryRef) {
+      (sharedStreamFactoryRef as React.MutableRefObject<StreamNodeFactory | null>).current = factory;
+    } else {
+      localStreamFactoryRef.current = factory;
+    }
+  }, [sharedStreamFactoryRef]);
 
   /**
    * 버퍼 채우기 (샘플 생성 및 링 버퍼에 쓰기)
@@ -293,7 +308,7 @@ export function useAdPlugPlayer({
             return;
           }
           setAudioContext(null);
-          streamFactoryRef.current = null;
+          setStreamFactory(null);
         }
 
         // Web Audio API 초기화
@@ -302,7 +317,7 @@ export function useAdPlugPlayer({
           audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
           setAudioContext(audioContext);
           // 새 AudioContext가 생성되면 StreamFactory도 리셋해야 함
-          streamFactoryRef.current = null;
+          setStreamFactory(null);
 
           // AudioContext 상태 변경 리스너 (Bluetooth 장치 변경 등 대응)
           const ctx = audioContext;
@@ -320,10 +335,11 @@ export function useAdPlugPlayer({
         }
 
         // StreamNodeFactory 생성 (처음 또는 AudioContext가 변경된 경우)
-        if (!streamFactoryRef.current || streamFactoryContextRef.current !== audioContext) {
+        const currentFactory = getStreamFactory();
+        if (!currentFactory || streamFactoryContextRef.current !== audioContext) {
           // .client.ts 모듈 사용으로 SSR 빌드에서 완전히 제외
           const { createStreamNodeFactory } = await import("./audio-worklet-loader.client");
-          streamFactoryRef.current = await createStreamNodeFactory(audioContext);
+          setStreamFactory(await createStreamNodeFactory(audioContext));
           streamFactoryContextRef.current = audioContext;
         }
 
@@ -378,7 +394,7 @@ export function useAdPlugPlayer({
         trackEndCallbackFiredRef.current = false;
 
         // OutputStreamNode 생성
-        const [outputNode, writer] = await streamFactoryRef.current.createManualBufferNode({
+        const [outputNode, writer] = await getStreamFactory()!.createManualBufferNode({
           channelCount: 2,
           frameCount: BUFFER_FRAME_COUNT,
         });
