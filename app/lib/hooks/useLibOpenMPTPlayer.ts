@@ -1,14 +1,14 @@
 /**
- * useAdPlugPlayer.ts - AdPlug 통합 플레이어 React 훅
+ * useLibOpenMPTPlayer.ts - libopenmpt 플레이어 React 훅
  *
  * @ain1084/audio-worklet-stream 라이브러리를 사용하여
- * Web Audio API와 AdPlug WASM을 연결하는 React 훅
- * IMS, ROL, VGM 및 모든 AdPlug 지원 포맷을 재생
+ * Web Audio API와 libopenmpt WASM을 연결하는 React 훅
+ * MOD, XM, IT, S3M 등 트래커 포맷을 재생
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { RefObject } from "react";
-import { AdPlugPlayer } from "../adplug/adplug";
+import { LibOpenMPTPlayer } from "../libopenmpt/libopenmpt";
 
 // @ain1084/audio-worklet-stream 타입 (SSR 빌드 호환성을 위해 any 사용)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,21 +19,20 @@ type OutputStreamNode = any;
 type FrameBufferWriter = any;
 
 // 기존 플레이어와 호환되는 상태 인터페이스
-export interface AdPlugPlaybackState {
+export interface LibOpenMPTPlaybackState {
   isPlaying: boolean;
   isPaused: boolean;
-  currentByte: number;  // 호환성을 위해 ms를 byte처럼 사용
-  totalSize: number;    // 호환성을 위해 maxPosition을 size처럼 사용
-  currentTick: number;
+  currentByte: number;  // 호환성을 위해 ms로 사용
+  totalSize: number;    // 호환성을 위해 duration ms로 사용
+  currentTick: number;  // 사용하지 않음 (libopenmpt는 tick 개념 없음)
   volume: number;
   tempo: number;
   currentTempo: number;
   fileName: string;
 }
 
-interface UseAdPlugPlayerOptions {
+interface UseLibOpenMPTPlayerOptions {
   musicFile: File | null;
-  bnkFile: File | null;
   fileLoadKey?: number;
   forceReloadRef?: RefObject<boolean>;
   onTrackEnd?: () => void;
@@ -41,8 +40,8 @@ interface UseAdPlugPlayerOptions {
   audioElementRef?: RefObject<HTMLAudioElement | null>;
 }
 
-interface UseAdPlugPlayerReturn {
-  state: AdPlugPlaybackState | null;
+interface UseLibOpenMPTPlayerReturn {
+  state: LibOpenMPTPlaybackState | null;
   isLoading: boolean;
   error: string | null;
   isPlayerReady: boolean;
@@ -62,29 +61,28 @@ interface UseAdPlugPlayerReturn {
   hardReset: () => Promise<void>;
 }
 
-const SAMPLE_RATE = 49716; // AdLib 네이티브 샘플레이트
-const BUFFER_FRAME_COUNT = 131072; // 링 버퍼 크기 (~3초 at 44100Hz, 백그라운드 탭 throttle 대응)
+const SAMPLE_RATE = 48000; // libopenmpt 표준 샘플레이트
+const BUFFER_FRAME_COUNT = 131072; // 링 버퍼 크기 (~3초 at 48000Hz)
 
 /**
- * AdPlug 통합 플레이어 React 훅
+ * libopenmpt 플레이어 React 훅
  */
-export function useAdPlugPlayer({
+export function useLibOpenMPTPlayer({
   musicFile,
-  bnkFile,
   fileLoadKey,
   forceReloadRef,
   onTrackEnd,
   sharedAudioContextRef,
   audioElementRef,
-}: UseAdPlugPlayerOptions): UseAdPlugPlayerReturn {
-  const [state, setState] = useState<AdPlugPlaybackState | null>(null);
+}: UseLibOpenMPTPlayerOptions): UseLibOpenMPTPlayerReturn {
+  const [state, setState] = useState<LibOpenMPTPlaybackState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
-  // AdPlug 플레이어
-  const playerRef = useRef<AdPlugPlayer | null>(null);
+  // libopenmpt 플레이어
+  const playerRef = useRef<LibOpenMPTPlayer | null>(null);
 
   // AudioContext 관련
   const localAudioContextRef = useRef<AudioContext | null>(null);
@@ -115,13 +113,12 @@ export function useAdPlugPlayer({
   // 버퍼 채우기 인터벌
   const fillIntervalRef = useRef<number | null>(null);
 
-  // ISS 동기화용
-  const refreshRateRef = useRef<number>(70.0);
-  const totalSamplesSentRef = useRef<number>(0);
-
   // 임시 샘플 버퍼 (생성된 샘플 중 아직 쓰지 못한 부분 저장)
-  const pendingSamplesRef = useRef<Int16Array | null>(null);
+  const pendingSamplesRef = useRef<Float32Array | null>(null);
   const pendingOffsetRef = useRef<number>(0);
+
+  // 전송된 총 프레임 수 (위치 추적용)
+  const totalFramesSentRef = useRef<number>(0);
 
   // AudioContext 접근 헬퍼
   const getAudioContext = useCallback(() => {
@@ -151,7 +148,6 @@ export function useAdPlugPlayer({
       return;
     }
 
-    const scale = 1 / 32768.0;
     let trackFinished = false;
 
     // 버퍼에 쓸 수 있는 공간이 있는 동안 샘플 채우기
@@ -163,16 +159,16 @@ export function useAdPlugPlayer({
         if (!pendingSamplesRef.current || pendingOffsetRef.current >= pendingSamplesRef.current.length) {
           const { samples, finished } = player.generateSamples();
 
+          if (finished) {
+            trackFinished = true;
+          }
+
           if (samples.length === 0) {
             break;
           }
 
           pendingSamplesRef.current = samples;
           pendingOffsetRef.current = 0;
-
-          if (finished) {
-            trackFinished = true;
-          }
         }
 
         // 현재 세그먼트에 쓸 수 있는 프레임 수 계산
@@ -181,17 +177,17 @@ export function useAdPlugPlayer({
         const remainingSegmentFrames = segment.frameCount - framesWritten;
         const framesToCopy = Math.min(remainingPendingFrames, remainingSegmentFrames);
 
-        // 샘플 복사 (Int16 -> Float32)
+        // 샘플 복사 (Float32 직접 복사 - 변환 불필요)
         for (let i = 0; i < framesToCopy; i++) {
           const srcIdx = pendingOffsetRef.current + i * 2;
           const dstFrame = framesWritten + i;
-          segment.set(dstFrame, 0, pendingSamples[srcIdx] * scale);     // Left
-          segment.set(dstFrame, 1, pendingSamples[srcIdx + 1] * scale); // Right
+          segment.set(dstFrame, 0, pendingSamples[srcIdx]);     // Left
+          segment.set(dstFrame, 1, pendingSamples[srcIdx + 1]); // Right
         }
 
         framesWritten += framesToCopy;
         pendingOffsetRef.current += framesToCopy * 2;
-        totalSamplesSentRef.current += framesToCopy;
+        totalFramesSentRef.current += framesToCopy;
       }
 
       return framesWritten;
@@ -201,7 +197,7 @@ export function useAdPlugPlayer({
     if (trackFinished) {
       if (loopEnabledRef.current) {
         player.rewind();
-        totalSamplesSentRef.current = 0;
+        totalFramesSentRef.current = 0;
         pendingSamplesRef.current = null;
         pendingOffsetRef.current = 0;
         trackEndCallbackFiredRef.current = false;
@@ -227,7 +223,7 @@ export function useAdPlugPlayer({
     if (fillIntervalRef.current !== null) {
       return;
     }
-    // 10ms마다 버퍼 채우기 (더 자주 채워서 언더런 방지)
+    // 10ms마다 버퍼 채우기
     fillIntervalRef.current = window.setInterval(() => {
       fillBuffer();
     }, 10);
@@ -309,7 +305,6 @@ export function useAdPlugPlayer({
 
         // StreamNodeFactory 생성 (처음만)
         if (!streamFactoryRef.current) {
-          // .client.ts 모듈 사용으로 SSR 빌드에서 완전히 제외
           const { createStreamNodeFactory } = await import("./audio-worklet-loader.client");
           streamFactoryRef.current = await createStreamNodeFactory(audioContext);
         }
@@ -319,26 +314,14 @@ export function useAdPlugPlayer({
           return;
         }
 
-        // AdPlug 플레이어 생성 및 초기화
-        const player = new AdPlugPlayer();
+        // libopenmpt 플레이어 생성 및 초기화
+        const player = new LibOpenMPTPlayer();
         await player.init(audioContext.sampleRate);
 
         if (cancelled) {
           player.destroy();
           initializingRef.current = false;
           return;
-        }
-
-        // BNK 파일 추가 (있는 경우)
-        if (bnkFile) {
-          const bnkBuffer = await bnkFile.arrayBuffer();
-          if (cancelled) {
-            player.destroy();
-            initializingRef.current = false;
-            return;
-          }
-          const bnkData = new Uint8Array(bnkBuffer);
-          player.addFile(bnkFile.name, bnkData);
         }
 
         // 음악 파일 로드
@@ -359,9 +342,7 @@ export function useAdPlugPlayer({
         isPlayingRef.current = false;
         isPausedRef.current = false;
 
-        // Refresh rate 저장
-        refreshRateRef.current = player.getRefreshRate();
-        totalSamplesSentRef.current = 0;
+        totalFramesSentRef.current = 0;
         trackEndCallbackFiredRef.current = false;
 
         // OutputStreamNode 생성
@@ -404,7 +385,7 @@ export function useAdPlugPlayer({
             audioElementRef.current.pause();
             audioElementRef.current.srcObject = mediaStreamDest.stream;
           } catch (error) {
-            console.warn('[useAdPlugPlayer] MediaStreamDestination 실패:', error);
+            console.warn('[useLibOpenMPTPlayer] MediaStreamDestination 실패:', error);
             analyser.connect(audioContext.destination);
           }
         } else {
@@ -413,12 +394,13 @@ export function useAdPlugPlayer({
 
         // 초기 상태 설정
         const playerState = player.getState();
+        const durationMs = playerState.durationSeconds * 1000;
 
         setState({
           isPlaying: false,
           isPaused: false,
           currentByte: 0,
-          totalSize: playerState.maxPosition || 1,
+          totalSize: durationMs || 1,
           currentTick: 0,
           volume: 100,
           tempo: 100,
@@ -432,7 +414,7 @@ export function useAdPlugPlayer({
       } catch (err) {
         initializingRef.current = false;
         if (!cancelled) {
-          console.error('[useAdPlugPlayer] 에러:', err);
+          console.error('[useLibOpenMPTPlayer] 에러:', err);
           setError(err instanceof Error ? err.message : "Unknown error");
           setIsLoading(false);
         }
@@ -445,7 +427,7 @@ export function useAdPlugPlayer({
       cancelled = true;
       cleanup();
     };
-  }, [musicFile, bnkFile, fileLoadKey]);
+  }, [musicFile, fileLoadKey]);
 
   /**
    * 정리 함수
@@ -454,7 +436,7 @@ export function useAdPlugPlayer({
     isPlayingRef.current = false;
     isPausedRef.current = false;
     stopFillInterval();
-    totalSamplesSentRef.current = 0;
+    totalFramesSentRef.current = 0;
 
     // OutputStreamNode 정리
     if (outputNodeRef.current) {
@@ -498,23 +480,6 @@ export function useAdPlugPlayer({
   }, [stopFillInterval]);
 
   /**
-   * 실제 재생된 틱 계산
-   */
-  const getPlayedTick = useCallback(() => {
-    if (!isPlayingRef.current || !playerRef.current || !outputNodeRef.current) return 0;
-
-    const wasmTick = playerRef.current.getCurrentTick();
-    const totalRead = Number(outputNodeRef.current.totalReadFrames);
-    const totalWritten = totalSamplesSentRef.current;
-
-    const samplesInBuffer = Math.max(0, totalWritten - totalRead);
-    const samplesPerTick = SAMPLE_RATE / refreshRateRef.current;
-    const ticksInBuffer = Math.floor(samplesInBuffer / samplesPerTick);
-
-    return Math.max(0, wasmTick - ticksInBuffer);
-  }, []);
-
-  /**
    * 재생된 시간 계산 (ms)
    */
   const getPlayedPositionMs = useCallback(() => {
@@ -531,19 +496,19 @@ export function useAdPlugPlayer({
   const refreshState = useCallback(() => {
     if (playerRef.current) {
       const playerState = playerRef.current.getState();
-      const currentTick = getPlayedTick();
       const currentPosition = getPlayedPositionMs();
+      const durationMs = playerState.durationSeconds * 1000;
 
       setState(prev => prev ? {
         ...prev,
         isPlaying: isPlayingRef.current,
         isPaused: isPausedRef.current,
         currentByte: currentPosition,
-        totalSize: playerState.maxPosition || prev.totalSize,
-        currentTick: currentTick,
+        totalSize: durationMs || prev.totalSize,
+        currentTick: 0,
       } : null);
     }
-  }, [getPlayedTick, getPlayedPositionMs]);
+  }, [getPlayedPositionMs]);
 
   /**
    * 완전 리셋
@@ -552,7 +517,7 @@ export function useAdPlugPlayer({
     isPlayingRef.current = false;
     isPausedRef.current = false;
     stopFillInterval();
-    totalSamplesSentRef.current = 0;
+    totalFramesSentRef.current = 0;
     trackEndCallbackFiredRef.current = false;
 
     setState(prev => prev ? {
@@ -609,11 +574,11 @@ export function useAdPlugPlayer({
    */
   const play = useCallback(async () => {
     if (!playerRef.current || !getAudioContext() || !outputNodeRef.current || !bufferWriterRef.current) {
-      console.warn('[useAdPlugPlayer] play() 호출됨 - 플레이어 준비 안됨');
+      console.warn('[useLibOpenMPTPlayer] play() 호출됨 - 플레이어 준비 안됨');
       return;
     }
     if (!playerRef.current.isFileLoaded()) {
-      console.warn('[useAdPlugPlayer] play() 호출됨 - 파일 로드 안됨');
+      console.warn('[useLibOpenMPTPlayer] play() 호출됨 - 파일 로드 안됨');
       return;
     }
 
@@ -630,13 +595,13 @@ export function useAdPlugPlayer({
       try {
         await audioElementRef.current.play();
       } catch (error) {
-        console.warn('[useAdPlugPlayer] Audio 요소 재생 실패:', error);
+        console.warn('[useLibOpenMPTPlayer] Audio 요소 재생 실패:', error);
       }
     }
 
     // 일시정지에서 재개하는 경우가 아니면 리셋
     if (!isPausedRef.current) {
-      totalSamplesSentRef.current = 0;
+      totalFramesSentRef.current = 0;
       trackEndCallbackFiredRef.current = false;
       pendingSamplesRef.current = null;
       pendingOffsetRef.current = 0;
@@ -648,7 +613,7 @@ export function useAdPlugPlayer({
         currentTick: 0,
       } : null);
 
-      // 초기 버퍼 채우기 (여러 번 호출해서 충분히 채움)
+      // 초기 버퍼 채우기
       isPlayingRef.current = true;
       playerRef.current.setIsPlaying(true);
       for (let i = 0; i < 5; i++) {

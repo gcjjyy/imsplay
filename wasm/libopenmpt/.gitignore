@@ -1,0 +1,10 @@
+# libopenmpt 원본 소스 (외부 의존성 - 별도 다운로드 필요)
+src/
+
+# Build artifacts
+build/
+dist/
+*.o
+
+# OS files
+.DS_Store

@@ -7,7 +7,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useFetcher } from "react-router";
 import { useAdPlugPlayer } from "~/lib/hooks/useAdPlugPlayer";
-import { ADPLUG_EXTENSIONS } from "~/lib/adplug/adplug";
+import { useLibOpenMPTPlayer } from "~/lib/hooks/useLibOpenMPTPlayer";
+import { getPlayerType, getAllSupportedExtensions, type PlayerType } from "~/lib/format-detection";
 // ═══════════════════════════════════════════════════════════════
 // [MEDIA SESSION API - 비활성화됨]
 // 나중에 재활성화하려면 이 섹션의 주석을 제거하세요
@@ -136,8 +137,20 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/04 Tropical Ghost Oasis.vgm", format: "VGM" },
   { musicFile: "/05 Welcome to a Kick In Yore Pants In Good Ole Hillville!.vgm", format: "VGM" },
   { musicFile: "/18 Tyrian, The Level.vgm", format: "VGM" },
-  // S3M 샘플 (AdLib 기반)
-  { musicFile: "/adlibsp.s3m", format: "S3M" },
+
+  // Tracker 샘플 - Demoscene Classics (libopenmpt)
+  { musicFile: "/skyrider.s3m", format: "S3M", title: "Purple Motion - Skyrider" },
+  { musicFile: "/satellite_one.s3m", format: "S3M", title: "Purple Motion - Satellite One" },
+  { musicFile: "/unreal2.s3m", format: "S3M", title: "Purple Motion - Unreal II (Second Reality)" },
+  { musicFile: "/celestial_fantasia.s3m", format: "S3M", title: "BeaT / Osmosys - Celestial Fantasia" },
+  { musicFile: "/dead_lock.xm", format: "XM", title: "Elwood - Dead Lock" },
+  { musicFile: "/space_debris.mod", format: "MOD", title: "Captain / Image - Space Debris" },
+  { musicFile: "/unreal_superhero3.xm", format: "XM", title: "Rez & Kenet - Unreal Superhero 3" },
+  { musicFile: "/point_of_departure.s3m", format: "S3M", title: "Necros - Point of Departure" },
+  { musicFile: "/astraying_voyages.s3m", format: "S3M", title: "Purple Motion - Astraying Voyages" },
+  { musicFile: "/crystal_dream.s3m", format: "S3M", title: "Triton - Crystal Dream II" },
+  { musicFile: "/axel_f.mod", format: "MOD", title: "Audiomonster - Axel F (Remix)" },
+  { musicFile: "/path_to_nowhere.xm", format: "XM", title: "Anvil - Path to Nowhere" },
 ];
 
 const BNK_FILE = "/STANDARD.BNK";
@@ -328,9 +341,15 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     if (!currentMusicFile) return null;
     const ext = currentMusicFile.name.toLowerCase().split(".").pop();
     if (!ext) return null;
-    // AdPlug 지원 포맷인지 체크
-    if (ADPLUG_EXTENSIONS.includes(`.${ext}`)) return ext.toUpperCase();
+    const allExtensions = getAllSupportedExtensions();
+    if (allExtensions.includes(`.${ext}`)) return ext.toUpperCase();
     return null;
+  }, [currentMusicFile]);
+
+  // 플레이어 타입 결정 (libopenmpt vs AdPlug)
+  const playerType: PlayerType = useMemo(() => {
+    if (!currentMusicFile) return null;
+    return getPlayerType(currentMusicFile.name);
   }, [currentMusicFile]);
 
   // 트랙 종료 콜백 (백그라운드에서도 작동)
@@ -338,16 +357,29 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     playNextTrackRef.current?.();
   }, []);
 
-  // AdPlug 통합 플레이어 (IMS, ROL, VGM 및 모든 AdPlug 지원 포맷)
-  const player = useAdPlugPlayer({
-    musicFile: currentMusicFile,
-    bnkFile: currentBnkFile,
+  // AdPlug 플레이어 (IMS, ROL, VGM 및 AdLib 전용 포맷)
+  const adplugPlayer = useAdPlugPlayer({
+    musicFile: playerType === 'adplug' ? currentMusicFile : null,
+    bnkFile: playerType === 'adplug' ? currentBnkFile : null,
     fileLoadKey,
     forceReloadRef,
     onTrackEnd: handleTrackEnd,
     sharedAudioContextRef,
     audioElementRef,
   });
+
+  // libopenmpt 플레이어 (MOD, XM, IT, S3M 등 트래커 포맷)
+  const libopenmptPlayer = useLibOpenMPTPlayer({
+    musicFile: playerType === 'libopenmpt' ? currentMusicFile : null,
+    fileLoadKey,
+    forceReloadRef,
+    onTrackEnd: handleTrackEnd,
+    sharedAudioContextRef,
+    audioElementRef,
+  });
+
+  // 활성 플레이어 선택 (통합 인터페이스)
+  const player = playerType === 'libopenmpt' ? libopenmptPlayer : adplugPlayer;
 
   const { state, error, isPlayerReady, analyserNode, play, pause, stop, setMasterVolume, checkPlayerReady, refreshState, hardReset } = player;
 
@@ -433,14 +465,15 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     setLoadedFileCount(0); // 로딩 카운트 초기화
 
     try {
-      // AdPlug 지원 확장자 패턴 생성
-      const adplugExtPattern = new RegExp(
-        `\\.(${ADPLUG_EXTENSIONS.map(e => e.slice(1)).join('|')})$`,
+      // 지원 확장자 패턴 생성 (AdPlug + libopenmpt)
+      const supportedExtensions = getAllSupportedExtensions();
+      const supportedExtPattern = new RegExp(
+        `\\.(${supportedExtensions.map(e => e.slice(1)).join('|')})$`,
         'i'
       );
 
       // 파일 분류 (대소문자 구별 없이)
-      const musicFiles = files.filter(f => adplugExtPattern.test(f.name));
+      const musicFiles = files.filter(f => supportedExtPattern.test(f.name));
       const bnkFiles = files.filter(f => /\.bnk$/i.test(f.name));
       const issFiles = files.filter(f => /\.iss$/i.test(f.name));
 
@@ -694,13 +727,25 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
    * titleMap을 사용하여 샘플 목록에 제목 추가
    */
   useEffect(() => {
+    const trackerFormats = ['MOD', 'S3M', 'XM', 'IT'];
     const samplesWithTitles = MUSIC_SAMPLES.map((sample) => {
+      const fileName = sample.musicFile.slice(1);
+
       if (sample.format === 'IMS') {
-        const fileName = sample.musicFile.slice(1);
+        // IMS: titleMap에서 Johab 변환된 제목 사용
         const title = titleMap[fileName] || fileName.replace('.IMS', '');
         return { ...sample, title };
+      } else if (trackerFormats.includes(sample.format)) {
+        // Tracker 포맷: 이미 제목이 있으면 사용, 없으면 titleMap에서 가져오기
+        if (sample.title) {
+          return sample;
+        }
+        const title = titleMap[fileName] || fileName;
+        return { ...sample, title };
       } else {
-        const title = sample.musicFile.slice(1).replace('.ROL', '');
+        // VGM, ROL 등 기타 포맷
+        const ext = `.${sample.format}`;
+        const title = fileName.replace(new RegExp(`${ext}$`, 'i'), '');
         return { ...sample, title };
       }
     });

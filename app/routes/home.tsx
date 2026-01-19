@@ -16,14 +16,55 @@ const IMS_FILES = MUSIC_SAMPLES
   .filter(sample => sample.format === "IMS")
   .map(sample => sample.musicFile.replace('/', ''));
 
+// Tracker 샘플 파일 목록 (MOD, S3M, XM, IT)
+const TRACKER_FORMATS = ["MOD", "S3M", "XM", "IT"];
+const TRACKER_FILES = MUSIC_SAMPLES
+  .filter(sample => TRACKER_FORMATS.includes(sample.format))
+  .map(sample => ({ fileName: sample.musicFile.replace('/', ''), format: sample.format }));
+
 /**
- * 서버 사이드에서 IMS 파일의 제목을 Johab → UTF-8로 변환
+ * 트래커 파일에서 제목 추출
+ */
+function extractTrackerTitle(buffer: Buffer, format: string): string {
+  try {
+    switch (format) {
+      case "MOD": {
+        // MOD: Title at offset 0, 20 bytes
+        const title = buffer.subarray(0, 20).toString('ascii').replace(/\0/g, '').trim();
+        return title;
+      }
+      case "S3M": {
+        // S3M: Title at offset 0, 28 bytes
+        const title = buffer.subarray(0, 28).toString('ascii').replace(/\0/g, '').trim();
+        return title;
+      }
+      case "XM": {
+        // XM: "Extended Module: " (17 bytes) + Title (20 bytes)
+        const title = buffer.subarray(17, 37).toString('ascii').replace(/\0/g, '').trim();
+        return title;
+      }
+      case "IT": {
+        // IT: "IMPM" (4 bytes) + Title (26 bytes)
+        const title = buffer.subarray(4, 30).toString('ascii').replace(/\0/g, '').trim();
+        return title;
+      }
+      default:
+        return "";
+    }
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * 서버 사이드에서 IMS/Tracker 파일의 메타데이터 추출
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const titleMap: Record<string, string> = {};
   const iconv = new Iconv('JOHAB', 'UTF-8//IGNORE');
   const publicDir = join(process.cwd(), 'public');
 
+  // IMS 파일 제목 추출 (Johab → UTF-8)
   for (const fileName of IMS_FILES) {
     try {
       const filePath = join(publicDir, fileName);
@@ -42,6 +83,21 @@ export async function loader({ request }: Route.LoaderArgs) {
       titleMap[fileName] = songName || fileName.replace('.IMS', '');
     } catch (error) {
       titleMap[fileName] = fileName.replace('.IMS', '');
+    }
+  }
+
+  // Tracker 파일 제목 추출 (MOD, S3M, XM, IT)
+  for (const { fileName, format } of TRACKER_FILES) {
+    try {
+      const filePath = join(publicDir, fileName);
+      const buffer = readFileSync(filePath);
+      const title = extractTrackerTitle(buffer, format);
+
+      if (title) {
+        titleMap[fileName] = title;
+      }
+    } catch (error) {
+      // 파일 읽기 실패 시 무시
     }
   }
 
