@@ -300,6 +300,15 @@ export function useAdPlugPlayer({
         if (!audioContext || audioContext.state === 'closed') {
           audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
           setAudioContext(audioContext);
+
+          // AudioContext 상태 변경 리스너 (Bluetooth 장치 변경 등 대응)
+          const ctx = audioContext;
+          ctx.onstatechange = () => {
+            if (ctx.state === 'suspended' && isPlayingRef.current) {
+              // 재생 중 suspended 되면 자동 resume 시도
+              ctx.resume().catch(() => {});
+            }
+          };
         }
 
         if (cancelled) {
