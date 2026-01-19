@@ -25,7 +25,7 @@ static int16_t* g_audioBuffer = nullptr;
 static int g_audioBufferLength = 0;
 static unsigned long g_currentPosition = 0;
 static unsigned long g_maxPosition = 0;
-static float g_sampleAccumulator = 0.0f;
+static double g_sampleAccumulator = 0.0;
 static unsigned long g_totalSamplesGenerated = 0;
 static unsigned long g_currentTick = 0; // ISS 가사 동기화용 틱 카운터
 
@@ -137,13 +137,13 @@ public:
 static CProvider_Memory g_memProvider;
 
 // Helper to calculate samples per tick
-static float getSamplesPerTick()
+static double getSamplesPerTick()
 {
     if (!g_player) return 0;
-    float refreshRate = g_player->getrefresh();
-    if (refreshRate <= 0) refreshRate = 70.0f; // Default
+    double refreshRate = g_player->getrefresh();
+    if (refreshRate <= 0) refreshRate = 70.0; // Default
 
-    return static_cast<float>(g_sampleRate) / refreshRate;
+    return static_cast<double>(g_sampleRate) / refreshRate;
 }
 
 extern "C" {
@@ -337,7 +337,7 @@ int emu_compute_audio_samples()
             g_opl->update(&g_audioBuffer[samplesGenerated * 2], toGenerate);
 
             samplesGenerated += toGenerate;
-            g_sampleAccumulator -= static_cast<float>(toGenerate);
+            g_sampleAccumulator -= static_cast<double>(toGenerate);
         }
 
         // Process next tick

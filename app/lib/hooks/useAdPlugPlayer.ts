@@ -62,7 +62,7 @@ interface UseAdPlugPlayerReturn {
   hardReset: () => Promise<void>;
 }
 
-const SAMPLE_RATE = 44100;
+const SAMPLE_RATE = 49716; // AdLib 네이티브 샘플레이트
 const BUFFER_FRAME_COUNT = 131072; // 링 버퍼 크기 (~3초 at 44100Hz, 백그라운드 탭 throttle 대응)
 
 /**
