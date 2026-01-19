@@ -89,6 +89,7 @@ export function useLibOpenMPTPlayer({
 
   // audio-worklet-stream 관련
   const streamFactoryRef = useRef<StreamNodeFactory | null>(null);
+  const streamFactoryContextRef = useRef<AudioContext | null>(null); // factory가 생성된 context 추적
   const outputNodeRef = useRef<OutputStreamNode | null>(null);
   const bufferWriterRef = useRef<FrameBufferWriter | null>(null);
 
@@ -314,10 +315,11 @@ export function useLibOpenMPTPlayer({
           return;
         }
 
-        // StreamNodeFactory 생성 (처음만)
-        if (!streamFactoryRef.current) {
+        // StreamNodeFactory 생성 (처음 또는 AudioContext가 변경된 경우)
+        if (!streamFactoryRef.current || streamFactoryContextRef.current !== audioContext) {
           const { createStreamNodeFactory } = await import("./audio-worklet-loader.client");
           streamFactoryRef.current = await createStreamNodeFactory(audioContext);
+          streamFactoryContextRef.current = audioContext;
         }
 
         if (cancelled) {

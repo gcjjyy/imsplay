@@ -91,6 +91,7 @@ export function useAdPlugPlayer({
 
   // audio-worklet-stream 관련
   const streamFactoryRef = useRef<StreamNodeFactory | null>(null);
+  const streamFactoryContextRef = useRef<AudioContext | null>(null); // factory가 생성된 context 추적
   const outputNodeRef = useRef<OutputStreamNode | null>(null);
   const bufferWriterRef = useRef<FrameBufferWriter | null>(null);
 
@@ -318,11 +319,12 @@ export function useAdPlugPlayer({
           return;
         }
 
-        // StreamNodeFactory 생성 (처음만)
-        if (!streamFactoryRef.current) {
+        // StreamNodeFactory 생성 (처음 또는 AudioContext가 변경된 경우)
+        if (!streamFactoryRef.current || streamFactoryContextRef.current !== audioContext) {
           // .client.ts 모듈 사용으로 SSR 빌드에서 완전히 제외
           const { createStreamNodeFactory } = await import("./audio-worklet-loader.client");
           streamFactoryRef.current = await createStreamNodeFactory(audioContext);
+          streamFactoryContextRef.current = audioContext;
         }
 
         if (cancelled) {
