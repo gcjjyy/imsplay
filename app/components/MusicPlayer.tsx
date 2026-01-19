@@ -689,7 +689,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         newFileName = sample?.musicFile.split("/").pop();
       }
 
-      // 플레이어 타입이 변경되면 이전 플레이어 정리 후 AudioContext 재생성
+      // 플레이어 타입이 변경되면 이전 플레이어 정리
       if (newFileName) {
         const newPlayerType = getPlayerType(newFileName);
         if (playerType !== null && newPlayerType !== null && playerType !== newPlayerType) {
@@ -698,13 +698,6 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
 
           // 이전 플레이어의 오디오 노드가 완전히 정리될 시간을 줌
           await new Promise(resolve => setTimeout(resolve, 100));
-
-          // 기존 AudioContext 정리 (새 플레이어가 올바른 sampleRate로 생성하도록)
-          const existingContext = sharedAudioContextRef.current;
-          if (existingContext && existingContext.state !== 'closed') {
-            await existingContext.close();
-          }
-          sharedAudioContextRef.current = null;
         }
       }
 

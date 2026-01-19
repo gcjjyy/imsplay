@@ -61,7 +61,7 @@ interface UseLibOpenMPTPlayerReturn {
   hardReset: () => Promise<void>;
 }
 
-const SAMPLE_RATE = 48000; // libopenmpt 표준 샘플레이트
+const SAMPLE_RATE = 44100; // 표준 샘플레이트 (브라우저 호환성)
 const BUFFER_FRAME_COUNT = 131072; // 링 버퍼 크기 (~3초 at 48000Hz)
 
 /**
