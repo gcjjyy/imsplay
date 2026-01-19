@@ -296,6 +296,8 @@ export function useLibOpenMPTPlayer({
         if (!audioContext || audioContext.state === 'closed') {
           audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
           setAudioContext(audioContext);
+          // 새 AudioContext가 생성되면 StreamFactory도 리셋해야 함
+          streamFactoryRef.current = null;
 
           // AudioContext 상태 변경 리스너 (Bluetooth 장치 변경 등 대응)
           const ctx = audioContext;
