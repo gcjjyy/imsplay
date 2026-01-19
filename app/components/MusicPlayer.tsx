@@ -145,7 +145,7 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/celestial_fantasia.s3m", format: "S3M", title: "BeaT / Osmosys - Celestial Fantasia" },
   { musicFile: "/dead_lock.xm", format: "XM", title: "Elwood - Dead Lock" },
   { musicFile: "/space_debris.mod", format: "MOD", title: "Captain / Image - Space Debris" },
-  { musicFile: "/unreal_superhero3.xm", format: "XM", title: "Rez & Kenet - Unreal Superhero 3" },
+  { musicFile: "/unreeeal_superhero_3.xm", format: "XM", title: "Rez & Kenet - Unreeeal Superhero 3" },
   { musicFile: "/point_of_departure.s3m", format: "S3M", title: "Necros - Point of Departure" },
   { musicFile: "/astraying_voyages.s3m", format: "S3M", title: "Purple Motion - Astraying Voyages" },
   { musicFile: "/crystal_dream.s3m", format: "S3M", title: "Triton - Crystal Dream II" },
