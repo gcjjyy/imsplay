@@ -166,6 +166,11 @@ body {
   min-height: 100%;
 }
 
+/* 포맷 확장자 스타일 */
+.format-ext {
+  color: #2563eb;
+}
+
 /* === 3D BORDER UTILITIES === */
 
 /* Raised (볼록 - 버튼, 패널) */
@@ -960,5 +965,10 @@ body {
   html,
   body {
     background: #18181f;
+  }
+
+  /* 포맷 확장자 - 노란색 */
+  .format-ext {
+    color: #fbbf24;
   }
 }
