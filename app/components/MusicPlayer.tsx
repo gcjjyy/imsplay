@@ -145,7 +145,6 @@ export const MUSIC_SAMPLES: MusicSample[] = [
   { musicFile: "/dead_lock.xm", format: "XM" },
   { musicFile: "/space_debris.mod", format: "MOD" },
   { musicFile: "/unreeeal_superhero_3.xm", format: "XM" },
-  { musicFile: "/point_of_departure.s3m", format: "S3M" },
   { musicFile: "/crystal_dream.s3m", format: "S3M" },
   { musicFile: "/axel_f.mod", format: "MOD" },
   { musicFile: "/path_to_nowhere.xm", format: "XM" },

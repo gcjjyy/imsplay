@@ -70,8 +70,8 @@ const AUDIO_BUFFER_FRAMES = 1024;
 // Render param indices (from libopenmpt)
 const OPENMPT_MODULE_RENDER_MASTERGAIN_MILLIBEL = 1;
 
-// Default master gain boost in millibels (300 mB = +3 dB)
-const DEFAULT_MASTER_GAIN_MILLIBEL = 300;
+// Default master gain boost in millibels (100 mB = +1 dB)
+const DEFAULT_MASTER_GAIN_MILLIBEL = 100;
 
 // Module loader cache
 let modulePromise: Promise<LibOpenMPTEmscriptenModule> | null = null;
