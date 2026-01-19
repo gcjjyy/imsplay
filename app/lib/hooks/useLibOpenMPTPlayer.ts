@@ -121,6 +121,9 @@ export function useLibOpenMPTPlayer({
   // 전송된 총 프레임 수 (위치 추적용)
   const totalFramesSentRef = useRef<number>(0);
 
+  // 실제 사용 중인 sample rate (AudioContext 기준)
+  const actualSampleRateRef = useRef<number>(SAMPLE_RATE);
+
   // AudioContext 접근 헬퍼
   const getAudioContext = useCallback(() => {
     return sharedAudioContextRef?.current ?? localAudioContextRef.current;
@@ -327,8 +330,9 @@ export function useLibOpenMPTPlayer({
           return;
         }
 
-        // libopenmpt 플레이어 생성 및 초기화
+        // libopenmpt 플레이어 생성 및 초기화 (AudioContext의 실제 sampleRate 사용)
         const player = new LibOpenMPTPlayer();
+        actualSampleRateRef.current = audioContext.sampleRate;
         await player.init(audioContext.sampleRate);
 
         if (cancelled) {
@@ -451,6 +455,10 @@ export function useLibOpenMPTPlayer({
     stopFillInterval();
     totalFramesSentRef.current = 0;
 
+    // 버퍼 정리 (플레이어 전환 시 스터터링 방지)
+    pendingSamplesRef.current = null;
+    pendingOffsetRef.current = 0;
+
     // OutputStreamNode 정리
     if (outputNodeRef.current) {
       try {
@@ -500,7 +508,8 @@ export function useLibOpenMPTPlayer({
       return 0;
     }
     const framesOutput = Number(outputNodeRef.current.totalReadFrames);
-    return Math.floor((framesOutput / SAMPLE_RATE) * 1000);
+    // 실제 AudioContext의 sampleRate 사용 (AdPlug 이후 재사용 시 49716Hz일 수 있음)
+    return Math.floor((framesOutput / actualSampleRateRef.current) * 1000);
   }, []);
 
   /**

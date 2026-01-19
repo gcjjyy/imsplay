@@ -469,6 +469,10 @@ export function useAdPlugPlayer({
     stopFillInterval();
     totalSamplesSentRef.current = 0;
 
+    // 버퍼 정리 (플레이어 전환 시 스터터링 방지)
+    pendingSamplesRef.current = null;
+    pendingOffsetRef.current = 0;
+
     // OutputStreamNode 정리
     if (outputNodeRef.current) {
       try {

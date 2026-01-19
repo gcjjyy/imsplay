@@ -505,37 +505,70 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
           titlesMap.set(file.name, title);
         });
 
-        // IMS 파일이 있으면 API 호출 (한글 제목 추출)
+        // IMS 파일이 있으면 캐시 확인 후 필요하면 API 호출 (한글 제목 추출)
         if (batchImsFiles.length > 0) {
-          const formData = new FormData();
-          batchImsFiles.forEach((file, index) => {
-            formData.append(`ims-${index}`, file);
-          });
+          // localStorage 캐시 확인
+          const uncachedImsFiles: File[] = [];
 
-          try {
-            const response = await fetch('/api/extract-titles', {
-              method: 'POST',
-              body: formData,
+          for (const file of batchImsFiles) {
+            const cacheKey = `ims-title-${file.name}-${file.size}`;
+            try {
+              const cachedTitle = localStorage.getItem(cacheKey);
+              if (cachedTitle) {
+                titlesMap.set(file.name, cachedTitle);
+              } else {
+                uncachedImsFiles.push(file);
+              }
+            } catch {
+              // localStorage 접근 실패 시 API 호출 대상에 추가
+              uncachedImsFiles.push(file);
+            }
+          }
+
+          // 캐시에 없는 파일만 API 호출
+          if (uncachedImsFiles.length > 0) {
+            const formData = new FormData();
+            uncachedImsFiles.forEach((file, index) => {
+              formData.append(`ims-${index}`, file);
             });
 
-            if (response.ok) {
-              const data = await response.json();
-              Object.entries(data.titleMap).forEach(([fileName, title]) => {
-                titlesMap.set(fileName, title as string);
+            try {
+              const response = await fetch('/api/extract-titles', {
+                method: 'POST',
+                body: formData,
               });
-              setUserMusicFileTitles(new Map(titlesMap));
-            } else if (response.status === 413) {
-              console.warn(`Batch 크기가 너무 큽니다. 배치 크기를 줄이세요.`);
-              batchImsFiles.forEach(file => {
+
+              if (response.ok) {
+                const data = await response.json();
+                Object.entries(data.titleMap).forEach(([fileName, title]) => {
+                  titlesMap.set(fileName, title as string);
+
+                  // localStorage에 캐싱 (파일 크기 포함)
+                  const file = uncachedImsFiles.find(f => f.name === fileName);
+                  if (file) {
+                    const cacheKey = `ims-title-${file.name}-${file.size}`;
+                    try {
+                      localStorage.setItem(cacheKey, title as string);
+                    } catch {
+                      // localStorage 저장 실패는 무시 (용량 초과 등)
+                    }
+                  }
+                });
+              } else if (response.status === 413) {
+                console.warn(`Batch 크기가 너무 큽니다. 배치 크기를 줄이세요.`);
+                uncachedImsFiles.forEach(file => {
+                  titlesMap.set(file.name, file.name.replace(/\.ims$/i, ''));
+                });
+              }
+            } catch (error) {
+              console.error(`Batch 처리 실패:`, error);
+              uncachedImsFiles.forEach(file => {
                 titlesMap.set(file.name, file.name.replace(/\.ims$/i, ''));
               });
             }
-          } catch (error) {
-            console.error(`Batch 처리 실패:`, error);
-            batchImsFiles.forEach(file => {
-              titlesMap.set(file.name, file.name.replace(/\.ims$/i, ''));
-            });
           }
+
+          setUserMusicFileTitles(new Map(titlesMap));
         }
 
         // 진행률 업데이트 및 배치 파일명 순차 표시
@@ -648,6 +681,24 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     setPlayingTrackIndex(index);
 
     try {
+      // 새 파일의 플레이어 타입 미리 확인
+      let newFileName: string | undefined;
+      if (isUserFolder || files) {
+        const musicFiles = files || userMusicFiles;
+        newFileName = musicFiles[index]?.name;
+      } else {
+        const sample = musicSamples[index];
+        newFileName = sample?.musicFile.split("/").pop();
+      }
+
+      // 플레이어 타입이 변경되면 forceReload 설정 (sample rate 차이 대응)
+      if (newFileName) {
+        const newPlayerType = getPlayerType(newFileName);
+        if (playerType !== null && newPlayerType !== null && playerType !== newPlayerType) {
+          forceReloadRef.current = true;
+        }
+      }
+
       if (isUserFolder || files) {
         // 사용자 폴더 모드
         const musicFiles = files || userMusicFiles;
@@ -718,7 +769,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
     } finally {
       setIsLoadingTrack(false);
     }
-  }, [isUserFolder, userMusicFiles, userBnkFiles, musicSamples, state?.isPlaying, hardReset]);
+  }, [isUserFolder, userMusicFiles, userBnkFiles, musicSamples, state?.isPlaying, hardReset, playerType]);
 
   /**
    * titleMap을 사용하여 샘플 목록에 제목 추가
