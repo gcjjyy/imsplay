@@ -1166,7 +1166,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                   background: 'var(--text-main)',
                   color: 'var(--bg-main)'
                 }}>
-                  <Play size={12} />
+                  <Volume2 size={12} />
                 </span>
               )}
             </div>
@@ -1195,7 +1195,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
                   background: 'var(--text-main)',
                   color: 'var(--bg-main)'
                 }}>
-                  <Play size={12} />
+                  <Volume2 size={12} />
                 </span>
             )}
           </div>
