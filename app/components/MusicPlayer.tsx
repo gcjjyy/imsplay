@@ -22,8 +22,15 @@ import DosList from "~/components/dos-ui/DosList";
 import DosSlider from "~/components/dos-ui/DosSlider";
 import LyricsDisplay from "./LyricsDisplay";
 import type { ISSData } from "~/routes/api/parse-iss";
-import { Repeat1, Repeat, Play, Square, SkipBack, SkipForward, Shuffle, HelpCircle, X, Volume2 } from "lucide-react";
+import { Repeat1, Repeat, Play, Square, SkipBack, SkipForward, Shuffle, HelpCircle, X, Volume2, AlertTriangle } from "lucide-react";
 import { version } from "../../package.json";
+
+/**
+ * SharedArrayBuffer 지원 여부 확인
+ */
+function isSharedArrayBufferSupported(): boolean {
+  return typeof SharedArrayBuffer !== 'undefined';
+}
 
 type MusicFormat = string | null;
 type RepeatMode = 'all' | 'one' | 'shuffle';
@@ -271,6 +278,14 @@ interface MusicPlayerProps {
 export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
   // React Router fetcher for API calls
   const fetcher = useFetcher<{ titleMap: Record<string, string> }>();
+
+  // SharedArrayBuffer 지원 여부 (클라이언트에서만 체크)
+  const [sabSupported, setSabSupported] = useState<boolean | null>(null);
+
+  // 클라이언트 마운트 시 SharedArrayBuffer 지원 여부 체크
+  useEffect(() => {
+    setSabSupported(isSharedArrayBufferSupported());
+  }, []);
 
   // 샘플 음악 목록
   const [musicSamples, setMusicSamples] = useState<MusicSample[]>(MUSIC_SAMPLES);
@@ -1714,8 +1729,22 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
             />
           </DosPanel>
 
+          {/* SharedArrayBuffer 미지원 경고 */}
+          {sabSupported === false && (
+            <div className="dos-message dos-message-error" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div style={{ marginBottom: '4px' }}>이 브라우저는 SharedArrayBuffer를 지원하지 않습니다.</div>
+                <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                  Chrome, Edge, Firefox 등 최신 데스크톱 브라우저를 사용해주세요.
+                  안드로이드에서는 Chrome 브라우저를 권장합니다.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 에러 메시지 */}
-          {error && (
+          {error && sabSupported !== false && (
             <div className="dos-message dos-message-error">
               오류: {error}
             </div>
