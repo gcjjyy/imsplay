@@ -22,7 +22,7 @@ import DosList from "~/components/dos-ui/DosList";
 import DosSlider from "~/components/dos-ui/DosSlider";
 import LyricsDisplay from "./LyricsDisplay";
 import type { ISSData } from "~/routes/api/parse-iss";
-import { Repeat1, Repeat, Play, Square, SkipBack, SkipForward, Shuffle, HelpCircle, X } from "lucide-react";
+import { Repeat1, Repeat, Play, Square, SkipBack, SkipForward, Shuffle, HelpCircle, X, Volume2 } from "lucide-react";
 import { version } from "../../package.json";
 
 type MusicFormat = string | null;
@@ -1137,6 +1137,8 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
 
   // 음악 리스트 아이템 생성
   const listItems = useMemo(() => {
+    const isCurrentlyPlaying = (index: number) => index === playingTrackIndex && state?.isPlaying;
+
     if (isUserFolder) {
       // 사용자 폴더 모드
       return userMusicFiles.map((file, index) => {
@@ -1147,11 +1149,26 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         return {
           key: `${index}-${file.name}`,
           content: (
-            <div className="flex gap-8 align-center w-full" style={{ overflow: 'hidden' }}>
+            <div className="flex gap-8 w-full" style={{ overflow: 'hidden', alignItems: 'center' }}>
               <span className={`dos-badge ${getFormatBadgeClass()}`} style={{ flexShrink: 0 }}>
                 {format}
               </span>
-              <span className="sample-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+              <span className="sample-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{title}</span>
+              {isCurrentlyPlaying(index) && (
+                <span style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: 'var(--text-main)',
+                  color: 'var(--bg-main)'
+                }}>
+                  <Play size={12} />
+                </span>
+              )}
             </div>
           ),
         };
@@ -1161,16 +1178,31 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
       return musicSamples.map((sample, index) => ({
         key: sample.musicFile,
         content: (
-          <div className="flex gap-8 align-center w-full" style={{ overflow: 'hidden' }}>
+          <div className="flex gap-8 w-full" style={{ overflow: 'hidden', alignItems: 'center' }}>
             <span className={`dos-badge ${getFormatBadgeClass()}`} style={{ flexShrink: 0 }}>
               {sample.format}
             </span>
-            <span className="sample-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sample.title || sample.musicFile.slice(1)}</span>
+            <span className="sample-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{sample.title || sample.musicFile.slice(1)}</span>
+            {isCurrentlyPlaying(index) && (
+              <span style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: 'var(--text-main)',
+                  color: 'var(--bg-main)'
+                }}>
+                  <Play size={12} />
+                </span>
+            )}
           </div>
         ),
       }));
     }
-  }, [isUserFolder, userMusicFiles, userMusicFileTitles, musicSamples]);
+  }, [isUserFolder, userMusicFiles, userMusicFileTitles, musicSamples, playingTrackIndex, state?.isPlaying]);
 
   // 선택된 트랙의 키 (UI 선택 기준)
   const selectedKey = useMemo(() => {
@@ -1748,7 +1780,7 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
             state.isPlaying
               ? format === "VGM" || format === "VGZ"
                 ? `재생중 - ${currentMusicFile?.name || '?'}`
-                : `재생중 - ${currentTrackTitle} (${currentMusicFile?.name || '?'}${currentBnkFile?.name ? ', ' + currentBnkFile.name : ''})`
+                : `재생중 - ${currentTrackTitle} (${currentMusicFile?.name || '?'}${playerType === 'adplug' && currentBnkFile?.name ? ', ' + currentBnkFile.name : ''})`
               : state.isPaused
                 ? "일시정지"
                 : "정지"

@@ -384,7 +384,7 @@ body {
 }
 
 .dos-list-item-selected {
-  background: var(--bg-main);
+  background: var(--bg-select);
   color: var(--text-select);
 }
 
