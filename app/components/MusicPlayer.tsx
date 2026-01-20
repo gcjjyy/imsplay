@@ -1347,6 +1347,70 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
         </div>
       )}
 
+      {/* SharedArrayBuffer 미지원 경고 팝업 */}
+      {sabSupported === false && (
+        <>
+          {/* 전체 화면 dimming */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              zIndex: 9998,
+            }}
+          />
+          {/* 다이얼로그 */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+            }}
+          >
+            <DosPanel
+              title={
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={16} />
+                  <span>브라우저 호환성 오류</span>
+                </span>
+              }
+              style={{
+                width: '400px',
+                maxWidth: '90vw',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
+              }}
+            >
+              <div style={{ padding: '8px', lineHeight: '1.6' }}>
+                <div style={{ marginBottom: '12px', color: 'var(--color-yellow)' }}>
+                  이 브라우저는 SharedArrayBuffer를 지원하지 않습니다.
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  음악 재생을 위해 다음 브라우저를 사용해주세요:
+                </div>
+                <ul style={{ margin: '0 0 12px 20px', padding: 0 }}>
+                  <li>Chrome (권장)</li>
+                  <li>Edge</li>
+                  <li>Firefox</li>
+                </ul>
+                <div style={{ fontSize: '12px', opacity: 0.8 }}>
+                  안드로이드에서는 Chrome 브라우저를 권장합니다.
+                  Samsung Internet 등 일부 브라우저에서는 지원되지 않습니다.
+                </div>
+              </div>
+            </DosPanel>
+          </div>
+        </>
+      )}
+
       {/* 지원 포맷 다이얼로그 */}
       {isFormatDialogOpen && (
         <>
@@ -1728,20 +1792,6 @@ export default function MusicPlayer({ titleMap }: MusicPlayerProps) {
               unit="%"
             />
           </DosPanel>
-
-          {/* SharedArrayBuffer 미지원 경고 */}
-          {sabSupported === false && (
-            <div className="dos-message dos-message-error" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <div>
-                <div style={{ marginBottom: '4px' }}>이 브라우저는 SharedArrayBuffer를 지원하지 않습니다.</div>
-                <div style={{ fontSize: '12px', opacity: 0.8 }}>
-                  Chrome, Edge, Firefox 등 최신 데스크톱 브라우저를 사용해주세요.
-                  안드로이드에서는 Chrome 브라우저를 권장합니다.
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 에러 메시지 */}
           {error && sabSupported !== false && (
